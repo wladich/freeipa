@@ -7,6 +7,7 @@ Module provides tests for the ipa-winsync-migrate command.
 import os
 import base64
 import re
+import logging
 
 import pytest
 
@@ -15,6 +16,7 @@ from ipaplatform.constants import constants as platformconstants
 from ipatests.pytest_ipa.integration import tasks
 from ipatests.test_integration.base import IntegrationTest
 
+logger = logging.getLogger(__name__)
 
 def get_windows_certificate(ad_host):
     certs_path = '/cygdrive/c/Windows/System32/CertSrv/CertEnroll/'
@@ -35,6 +37,10 @@ def establish_winsync_agreement(master, ad):
     cert_path = master.run_command(['mktemp']).stdout_text.strip()
     master.put_file_contents(cert_path, convert_crt_to_cer(win_cert))
     master.run_command(['kdestroy', '-A'])
+    res = master.run_command(['openssl', 's_client',
+                        '-connect', '{}:636'.format(ad.hostname),
+                        '-CAfile', cert_path], stdin_text='\n')
+    logger.info('OPENSSL CONNECT DEBUG:\n' + res.stdout_text)
     master.run_command([
         'ipa-replica-manage', 'connect', '--winsync',
         '--binddn', 'cn=%s,cn=users,%s' % (ad.config.ad_admin_name,
