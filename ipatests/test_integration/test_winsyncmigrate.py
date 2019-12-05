@@ -8,6 +8,8 @@ import os
 import base64
 import re
 import logging
+import time
+import subprocess
 
 import pytest
 
@@ -37,20 +39,25 @@ def establish_winsync_agreement(master, ad):
     cert_path = master.run_command(['mktemp']).stdout_text.strip()
     master.put_file_contents(cert_path, convert_crt_to_cer(win_cert))
     master.run_command(['kdestroy', '-A'])
-    res = master.run_command(['openssl', 's_client',
-                        '-connect', '{}:636'.format(ad.hostname),
-                        '-CAfile', cert_path], stdin_text='\n')
-    logger.info('OPENSSL CONNECT DEBUG:\n' + res.stdout_text)
-    master.run_command([
-        'ipa-replica-manage', 'connect', '--winsync',
-        '--binddn', 'cn=%s,cn=users,%s' % (ad.config.ad_admin_name,
-                                           ad.domain.basedn),
-        '--bindpw', ad.config.ad_admin_password,
-        '--password', master.config.dirman_password,
-        '--cacert', cert_path,
-        '--passsync', 'dummy',
-        ad.hostname, '-v'
-    ])
+    try:
+        res = master.run_command(['openssl', 's_client',
+                            '-connect', '{}:636'.format(ad.hostname),
+                            '-CAfile', cert_path], stdin_text='\n')
+        logger.info('OPENSSL CONNECT DEBUG:\n' + res.stdout_text)
+        master.run_command([
+            'ipa-replica-manage', 'connect', '--winsync',
+            '--binddn', 'cn=%s,cn=users,%s' % (ad.config.ad_admin_name,
+                                               ad.domain.basedn),
+            '--bindpw', ad.config.ad_admin_password,
+            '--password', master.config.dirman_password,
+            '--cacert', cert_path,
+            '--passsync', 'dummy',
+            ad.hostname, '-v'
+        ])
+    except Exception as e:
+        logging.error('Exception occured while establishing agreement: %s', e)
+        logging.info('Sleeping for 20 hours')
+        subprocess.check_call(['sleep', str(20 * 3600)])
     master.run_command(['rm', cert_path])
 
 
@@ -87,7 +94,14 @@ class TestWinsyncMigrate(IntegrationTest):
         cls.create_test_objects()
         establish_winsync_agreement(cls.master, cls.ad)
         tasks.kinit_admin(cls.master)
-        cls.setup_user_memberships(cls.ad_user)
+        try:
+            cls.setup_user_memberships(cls.ad_user)
+        except Exception as e:
+            logging.error('Exception occured while trying to use replicated objects: %s',
+                          e)
+            logging.info('Sleeping for 20 hours')
+            subprocess.check_call(['sleep', str(20 * 3600)])
+
         # store user uid and gid
         result = cls.master.run_command(['getent', 'passwd', cls.ad_user])
         testuser_regex = (
