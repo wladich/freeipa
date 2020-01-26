@@ -31,6 +31,10 @@ class BaseTestTrust(IntegrationTest):
     default_shell = platformconstants.DEFAULT_SHELL
 
     @classmethod
+    def uninstall(cls, mh):
+        pass
+
+    @classmethod
     def install(cls, mh):
         if not cls.master.transport.file_exists('/usr/bin/rpcclient'):
             raise unittest.SkipTest("Package samba-client not available "

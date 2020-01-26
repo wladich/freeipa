@@ -71,7 +71,7 @@ jobs:
         build_url: '{fedora-latest/build_url}'
         test_suite: test_integration/test_trust.py
         template: *ci-master-latest
-        timeout: 7200
+        timeout: 720000
         topology: *adroot_adchild_adtree_master_1client
 
   fedora-latest/test_trust2:
@@ -83,7 +83,7 @@ jobs:
         build_url: '{fedora-latest/build_url}'
         test_suite: test_integration/test_trust.py
         template: *ci-master-latest
-        timeout: 7200
+        timeout: 720000
         topology: *adroot_adchild_adtree_master_1client
 
   fedora-latest/test_trust3:
@@ -95,7 +95,7 @@ jobs:
         build_url: '{fedora-latest/build_url}'
         test_suite: test_integration/test_trust.py
         template: *ci-master-latest
-        timeout: 7200
+        timeout: 720000
         topology: *adroot_adchild_adtree_master_1client
 
   fedora-latest/test_trust4:
@@ -107,7 +107,7 @@ jobs:
         build_url: '{fedora-latest/build_url}'
         test_suite: test_integration/test_trust.py
         template: *ci-master-latest
-        timeout: 7200
+        timeout: 720000
         topology: *adroot_adchild_adtree_master_1client
 
   fedora-latest/test_trust5:
@@ -119,7 +119,7 @@ jobs:
         build_url: '{fedora-latest/build_url}'
         test_suite: test_integration/test_trust.py
         template: *ci-master-latest
-        timeout: 7200
+        timeout: 720000
         topology: *adroot_adchild_adtree_master_1client
 
   fedora-latest/test_trust6:
@@ -131,7 +131,7 @@ jobs:
         build_url: '{fedora-latest/build_url}'
         test_suite: test_integration/test_trust.py
         template: *ci-master-latest
-        timeout: 7200
+        timeout: 720000
         topology: *adroot_adchild_adtree_master_1client
 
   fedora-latest/test_trust7:
@@ -143,7 +143,7 @@ jobs:
         build_url: '{fedora-latest/build_url}'
         test_suite: test_integration/test_trust.py
         template: *ci-master-latest
-        timeout: 7200
+        timeout: 720000
         topology: *adroot_adchild_adtree_master_1client
 
   fedora-latest/test_trust8:
@@ -155,7 +155,7 @@ jobs:
         build_url: '{fedora-latest/build_url}'
         test_suite: test_integration/test_trust.py
         template: *ci-master-latest
-        timeout: 7200
+        timeout: 720000
         topology: *adroot_adchild_adtree_master_1client
 
   fedora-latest/test_trust9:
@@ -167,7 +167,7 @@ jobs:
         build_url: '{fedora-latest/build_url}'
         test_suite: test_integration/test_trust.py
         template: *ci-master-latest
-        timeout: 7200
+        timeout: 720000
         topology: *adroot_adchild_adtree_master_1client
 
   fedora-latest/test_trust10:
@@ -179,41 +179,126 @@ jobs:
         build_url: '{fedora-latest/build_url}'
         test_suite: test_integration/test_trust.py
         template: *ci-master-latest
-        timeout: 7200
+        timeout: 720000
         topology: *adroot_adchild_adtree_master_1client
 
-  fedora-latest/test_smb:
+  fedora-latest/test_trust11:
     requires: [fedora-latest/build]
     priority: 50
     job:
       class: RunADTests
       args:
         build_url: '{fedora-latest/build_url}'
-        test_suite: test_integration/test_smb.py
+        test_suite: test_integration/test_trust.py
         template: *ci-master-latest
-        timeout: 7200
-        topology: *ad_master_2client
+        timeout: 720000
+        topology: *adroot_adchild_adtree_master_1client
 
-  fedora-latest/test_sssd:
+  fedora-latest/test_trust12:
     requires: [fedora-latest/build]
     priority: 50
     job:
       class: RunADTests
       args:
         build_url: '{fedora-latest/build_url}'
-        test_suite: test_integration/test_sssd.py
+        test_suite: test_integration/test_trust.py
         template: *ci-master-latest
-        timeout: 4800
-        topology: *ad_master
+        timeout: 720000
+        topology: *adroot_adchild_adtree_master_1client
 
-  fedora-latest/test_winsyncmigrate:
+  fedora-latest/test_trust13:
     requires: [fedora-latest/build]
     priority: 50
     job:
       class: RunADTests
       args:
         build_url: '{fedora-latest/build_url}'
-        test_suite: test_integration/test_winsyncmigrate.py
+        test_suite: test_integration/test_trust.py
         template: *ci-master-latest
-        timeout: 4800
-        topology: *ad_master
+        timeout: 720000
+        topology: *adroot_adchild_adtree_master_1client
+
+  fedora-latest/test_trust14:
+    requires: [fedora-latest/build]
+    priority: 50
+    job:
+      class: RunADTests
+      args:
+        build_url: '{fedora-latest/build_url}'
+        test_suite: test_integration/test_trust.py
+        template: *ci-master-latest
+        timeout: 720000
+        topology: *adroot_adchild_adtree_master_1client
+
+  fedora-latest/test_trust15:
+    requires: [fedora-latest/build]
+    priority: 50
+    job:
+      class: RunADTests
+      args:
+        build_url: '{fedora-latest/build_url}'
+        test_suite: test_integration/test_trust.py
+        template: *ci-master-latest
+        timeout: 720000
+        topology: *adroot_adchild_adtree_master_1client
+
+  fedora-latest/test_trust16:
+    requires: [fedora-latest/build]
+    priority: 50
+    job:
+      class: RunADTests
+      args:
+        build_url: '{fedora-latest/build_url}'
+        test_suite: test_integration/test_trust.py
+        template: *ci-master-latest
+        timeout: 720000
+        topology: *adroot_adchild_adtree_master_1client
+
+  fedora-latest/test_trust17:
+    requires: [fedora-latest/build]
+    priority: 50
+    job:
+      class: RunADTests
+      args:
+        build_url: '{fedora-latest/build_url}'
+        test_suite: test_integration/test_trust.py
+        template: *ci-master-latest
+        timeout: 720000
+        topology: *adroot_adchild_adtree_master_1client
+
+  fedora-latest/test_trust18:
+    requires: [fedora-latest/build]
+    priority: 50
+    job:
+      class: RunADTests
+      args:
+        build_url: '{fedora-latest/build_url}'
+        test_suite: test_integration/test_trust.py
+        template: *ci-master-latest
+        timeout: 720000
+        topology: *adroot_adchild_adtree_master_1client
+
+  fedora-latest/test_trust19:
+    requires: [fedora-latest/build]
+    priority: 50
+    job:
+      class: RunADTests
+      args:
+        build_url: '{fedora-latest/build_url}'
+        test_suite: test_integration/test_trust.py
+        template: *ci-master-latest
+        timeout: 720000
+        topology: *adroot_adchild_adtree_master_1client
+
+  fedora-latest/test_trust20:
+    requires: [fedora-latest/build]
+    priority: 50
+    job:
+      class: RunADTests
+      args:
+        build_url: '{fedora-latest/build_url}'
+        test_suite: test_integration/test_trust.py
+        template: *ci-master-latest
+        timeout: 720000
+        topology: *adroot_adchild_adtree_master_1client
+
