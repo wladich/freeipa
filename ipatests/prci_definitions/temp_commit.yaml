@@ -41,6 +41,10 @@ topologies:
    name: ad_master
    cpu: 4
    memory: 12000
+  adroot_adchild_adtree_master_1client: &adroot_adchild_adtree_master_1client
+    name: adroot_adchild_adtree_master_1client
+    cpu: 8
+    memory: 14500
 
 jobs:
   fedora-27/build:
@@ -57,14 +61,14 @@ jobs:
         timeout: 1800
         topology: *build
 
-  fedora-27/temp_commit:
+  fedora-27/test_trust:
     requires: [fedora-27/build]
     priority: 50
     job:
-      class: RunPytest
+      class: RunADTests
       args:
         build_url: '{fedora-27/build_url}'
-        test_suite: test_integration/test_REPLACEME.py
+        test_suite: test_integration/test_trust.py
         template: *ci-master-f27
-        timeout: 3600
-        topology: *master_1repl_1client
+        timeout: 4800
+        topology: *adroot_adchild_adtree_master_1client
