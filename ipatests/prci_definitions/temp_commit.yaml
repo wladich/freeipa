@@ -43,7 +43,7 @@ topologies:
     memory: 12000
 
 jobs:
-  fedora-latest/build:
+  fedora-previous/build:
     requires: []
     priority: 100
     job:
@@ -51,21 +51,20 @@ jobs:
       args:
         git_repo: '{git_repo}'
         git_refspec: '{git_refspec}'
-        template: &ci-master-latest
-          name: freeipa/ci-master-f31
-          version: 0.0.3
+        template: &ci-master-previous
+          name: freeipa/ci-master-f30
+          version: 0.0.6
         timeout: 1800
         topology: *build
 
-  fedora-latest/test_sssd:
-    requires: [fedora-latest/build]
+  fedora-previous/test_sssd:
+    requires: [fedora-previous/build]
     priority: 50
     job:
       class: RunADTests
       args:
-        build_url: '{fedora-latest/build_url}'
-        update_packages: True
+        build_url: '{fedora-previous/build_url}'
         test_suite: test_integration/test_sssd.py
-        template: *ci-master-latest
+        template: *ci-master-previous
         timeout: 4800
         topology: *ad_master_2client
