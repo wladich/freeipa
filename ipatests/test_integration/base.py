@@ -35,6 +35,7 @@ class IntegrationTest:
     num_ad_domains = 0
     num_ad_subdomains = 0
     num_ad_treedomains = 0
+    num_ad_root_clients = 0
     required_extra_roles = []
     topology = None
     domain_level = None
