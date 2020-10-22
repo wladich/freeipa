@@ -375,7 +375,7 @@ def mh(request, class_integration_logs):
     for _i in range(cls.num_ad_domains):
         domain_descriptions.append({
             'type': 'AD',
-            'hosts': {'ad': 1}
+            'hosts': {'ad': 1, 'client': cls.num_ad_root_clients}
         })
     for _i in range(cls.num_ad_subdomains):
         domain_descriptions.append({
