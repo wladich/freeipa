@@ -1893,6 +1893,7 @@ def strip_cert_header(pem):
 
 def user_add(host, login, first='test', last='user', extra_args=(),
              password=None):
+    kinit_admin(host)
     cmd = [
         "ipa", "user-add", login,
         "--first", first,
@@ -1907,18 +1908,26 @@ def user_add(host, login, first='test', last='user', extra_args=(),
     return host.run_command(cmd, stdin_text=stdin_text)
 
 
-def user_del(host, login):
+def user_del(host, login, ignore_not_exists=False):
+    kinit_admin(host)
     cmd = ["ipa", "user-del", login]
-    return host.run_command(cmd)
+    return host.run_command(
+        cmd, ok_returncode=[0, 2] if ignore_not_exists else 0)
 
 
 def group_add(host, groupname, extra_args=()):
+    kinit_admin(host)
     cmd = [
         "ipa", "group-add", groupname,
     ]
     cmd.extend(extra_args)
     return host.run_command(cmd)
 
+def group_del(host, login, ignore_not_exists=False):
+    kinit_admin(host)
+    cmd = ["ipa", "group-del", login]
+    return host.run_command(
+        cmd, ok_returncode=[0, 2] if ignore_not_exists else 0)
 
 def ldapmodify_dm(host, ldif_text, **kwargs):
     """Run ldapmodify as Directory Manager
