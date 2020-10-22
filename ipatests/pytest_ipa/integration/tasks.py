@@ -2591,3 +2591,22 @@ def run_ssh_cmd(
             assert "Authentication succeeded" not in stderr
             assert "No more authentication methods to try." in stderr
     return (return_code, stdout, stderr)
+
+
+def configure_ipa_client_for_ad_trust(client):
+    """Configure ipa client to accept logins of Windows AD users.
+    This is a workaround for https://pagure.io/freeipa/issue/6523:
+    when ipa-client-install is called with --server option, dns_lookup_realm
+    and dns_lookup_kdc options in kreb5.conf are set to "false" preventing
+    libkrb5 from discovering AD realm.
+    This function modifies krb5.conf on client. You need to restart sssd
+    to apply the changes.
+    """
+    krb5conf = client.get_file_contents(paths.KRB5_CONF, encoding='utf-8')
+    krb5conf, n = re.subn(
+        ' dns_lookup_realm = .+', ' dns_lookup_realm = true', krb5conf)
+    assert n == 1
+    krb5conf, n = re.subn(
+        ' dns_lookup_kdc = .+', ' dns_lookup_kdc = true', krb5conf)
+    assert n == 1
+    client.put_file_contents(paths.KRB5_CONF, krb5conf)
