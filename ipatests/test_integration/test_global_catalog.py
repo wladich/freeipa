@@ -116,6 +116,22 @@ def decode_ad_group_type(s):
     return group_type
 
 
+def setup_debug_log_for_global_gatalog(host):
+    contents = textwrap.dedent('''
+        [global]
+        debug=True
+    ''')
+    host.put_file_contents('/etc/ipa/globalcatalog.conf', contents)
+
+
+def get_changes_in_gc_log(s):
+    changes_lines = []
+    for line in s.splitlines():
+        if re.search(r'\b(user|group)_(add|del)\b', s):
+            changes_lines.append(line)
+    return changes_lines
+
+
 class SimpleTestUser:
     def __init__(self, first, last):
         self.first = first
@@ -157,6 +173,7 @@ class TestGlobalCatalogInstallation(IntegrationTest):
         tasks.config_host_resolvconf_with_master_data(cls.master, cls.replica)
         disable_network_manager_resolv_conf_management(cls.replica)
 
+        setup_debug_log_for_global_gatalog(cls.master)
     def get_gc_record(self, user_or_group):
         tasks.kinit_admin(self.master)
         result = ldapsearch_gc(
@@ -509,8 +526,9 @@ class TestGlobalCatalogInstallation(IntegrationTest):
 
                 log = get_log_tail()
                 assert log.count(LOG_MESSAGE_GC_INITIALIZED) == 1
+                assert not get_changes_in_gc_log(log)
+                # FIXME: ignore unimportant errors, uncomment
                 # assert 'ERROR' not in log
-                # TODO: check nothing was written to GC instance during install
 
             tasks.user_add(self.master, user2.login, user2.first, user2.last)
             self.assert_exists_in_gc(user2.cn)
