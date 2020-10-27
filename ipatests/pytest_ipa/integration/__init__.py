@@ -82,7 +82,9 @@ CLASS_LOGFILES = [
     paths.HOSTS,
     # IPA renewal lock
     paths.IPA_RENEWAL_LOCK,
-    paths.LETS_ENCRYPT_LOG
+    paths.LETS_ENCRYPT_LOG,
+    # global catalog sync daemon logs
+    paths.GCSYNCD_LOG,
 ]
 
 
