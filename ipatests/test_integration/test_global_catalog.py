@@ -9,7 +9,7 @@ import time
 import textwrap
 import pytest
 
-
+from ipaplatform.paths import paths
 from ipatests.pytest_ipa.integration import tasks
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration.firewall import Firewall
@@ -18,7 +18,6 @@ from ldif import LDIFRecordList
 
 gc_dirsrv_service = 'dirsrv@GLOBAL-CATALOG.service'
 gsyncd_service = 'ipa-gcsyncd.service'
-GLOBAL_CATALOG_LOG = '/var/log/ipa/globalcatalog.log'
 LOG_MESSAGE_GC_INITIALIZED = 'Initial LDAP dump is done, now synchronizing with GC'
 
 
@@ -245,7 +244,7 @@ class TestGlobalCatalogInstallation(IntegrationTest):
         self.master.run_command(['systemctl', 'is-active', gsyncd_service],
                                 ok_returncode=3)
 
-        with log_tail(self.master, GLOBAL_CATALOG_LOG) as get_log_tail:
+        with log_tail(self.master, paths.GCSYNCD_LOG) as get_log_tail:
             res = self.master.run_command(['ipa-adtrust-install', '-U', '-a',
                                            self.master.config.admin_password,
                                            '--add-sids'])
@@ -529,7 +528,7 @@ class TestGlobalCatalogInstallation(IntegrationTest):
         for daemon in daemons:
             self.master.run_command(['systemctl', 'stop', services[daemon]])
         try:
-            with log_tail(self.master, GLOBAL_CATALOG_LOG) as get_log_tail:
+            with log_tail(self.master, paths.GCSYNCD_LOG) as get_log_tail:
                 for daemon in daemons:
                     self.master.run_command(
                         ['systemctl', 'start', services[daemon]])
@@ -545,7 +544,7 @@ class TestGlobalCatalogInstallation(IntegrationTest):
     def do_sync_on_starup(self, action):
         self.master.run_command(['systemctl', 'stop', gsyncd_service])
         action()
-        with log_tail(self.master, GLOBAL_CATALOG_LOG) as get_log_tail:
+        with log_tail(self.master, paths.GCSYNCD_LOG) as get_log_tail:
             self.master.run_command(['systemctl', 'start', gsyncd_service])
             assert wait_for(
                 lambda: LOG_MESSAGE_GC_INITIALIZED in get_log_tail(), 30)
@@ -623,7 +622,7 @@ class TestGlobalCatalogInstallation(IntegrationTest):
         try:
             tasks.user_add(self.master, user1.login, user1.first, user1.last)
             self.assert_exists_in_gc(user1.cn)
-            with log_tail(self.master, GLOBAL_CATALOG_LOG) as get_log_tail:
+            with log_tail(self.master, paths.GCSYNCD_LOG) as get_log_tail:
                 res = self.master.run_command([
                     'ipa-adtrust-install', '-U',
                     '-a', self.master.config.admin_password])
@@ -651,7 +650,7 @@ class TestGlobalCatalogInstallation(IntegrationTest):
         self.master.run_command(['ipactl', 'stop'])
         assert not is_service_active(self.master, gc_dirsrv_service)
         assert not is_service_active(self.master, gsyncd_service)
-        with log_tail(self.master, GLOBAL_CATALOG_LOG) as get_log_tail:
+        with log_tail(self.master, paths.GCSYNCD_LOG) as get_log_tail:
             self.master.run_command(['ipactl', 'start'])
             assert is_service_active(self.master, gc_dirsrv_service)
             assert is_service_active(self.master, gsyncd_service)
