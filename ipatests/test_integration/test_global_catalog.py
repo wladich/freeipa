@@ -127,7 +127,7 @@ def setup_debug_log_for_global_gatalog(host):
 def get_changes_in_gc_log(s):
     changes_lines = []
     for line in s.splitlines():
-        if re.search(r'\b(user|group)_(add|del)\b', s):
+        if re.search(r'\b(user|group)_(add|del)\b', line):
             changes_lines.append(line)
     return changes_lines
 
