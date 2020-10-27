@@ -509,6 +509,39 @@ class TestGlobalCatalogInstallation(IntegrationTest):
         finally:
             tasks.user_del(self.replica, user['login'], ignore_not_exists=True)
 
+
+    @pytest.mark.parametrize(
+        'daemons',[
+            ['dirsrv main'],
+            ['dirsrv gc'],
+            ['dirsrv main', 'dirsrv gc'],
+            ['gsyncd'],
+            ['dirsrv main', 'dirsrv gc', 'dirsrv main', 'dirsrv gc', 'gsyncd']],
+        ids=['dirsrv main', 'dirsrv gc', 'dirsrv all', 'gsyncd', 'all'])
+    def test_syncd_reconnects_after_restart(self, daemons):
+        services = {
+            'dirsrv main': 'dirsrv@{}.service'.format(
+                self.master.domain.realm.replace('.', '-')),
+            'dirsrv gc': gc_dirsrv_service,
+            'gsyncd': gsyncd_service
+        }
+        user = SimpleTestUser('Reconnect', 'MainInstance')
+        for daemon in daemons:
+            self.master.run_command(['systemctl', 'stop', services[daemon]])
+        try:
+            with log_tail(self.master, GLOBAL_CATALOG_LOG) as get_log_tail:
+                for daemon in daemons:
+                    self.master.run_command(
+                        ['systemctl', 'start', services[daemon]])
+                if 'dirsrv main' in daemons or 'gsyncd' in daemons:
+                    assert wait_for(
+                        lambda: LOG_MESSAGE_GC_INITIALIZED in get_log_tail(), 90)
+                tasks.user_add(self.master, user.login, user.first,
+                               user.last)
+                self.assert_exists_in_gc(user.cn)
+        finally:
+            tasks.user_del(self.master, user.login, ignore_not_exists=True)
+
     def do_sync_on_starup(self, action):
         self.master.run_command(['systemctl', 'stop', gsyncd_service])
         action()
