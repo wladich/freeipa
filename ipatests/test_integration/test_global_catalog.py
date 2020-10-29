@@ -550,6 +550,19 @@ class TestGlobalCatalogInstallation(IntegrationTest):
         finally:
             tasks.user_del(self.master, user.login, ignore_not_exists=True)
 
+    def test_syncd_reconnects_after_ipactl_restart(self):
+        user = SimpleTestUser('Test', 'ReconnectsIpactlRestart')
+        try:
+            with log_tail(self.master, paths.GCSYNCD_LOG) as get_log_tail:
+                self.master.run_command(['ipactl', 'restart'])
+                assert wait_for(
+                    lambda: LOG_MESSAGE_GC_INITIALIZED in get_log_tail(), 90)
+                tasks.user_add(self.master, user.login, user.first,
+                               user.last)
+                self.assert_exists_in_gc(user.cn)
+        finally:
+            tasks.user_del(self.master, user.login, ignore_not_exists=True)
+
     def do_sync_on_starup(self, action):
         self.master.run_command(['systemctl', 'stop', gsyncd_service])
         action()
