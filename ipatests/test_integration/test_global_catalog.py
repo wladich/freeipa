@@ -174,6 +174,12 @@ class TestGlobalCatalogInstallation(IntegrationTest):
         disable_network_manager_resolv_conf_management(cls.replica)
 
         setup_debug_log_for_global_gatalog(cls.master)
+
+    @property
+    def main_dirsrv_service(self):
+        return 'dirsrv@{}.service'.format(
+            self.master.domain.realm.replace('.', '-'))
+
     def get_gc_record(self, user_or_group):
         tasks.kinit_admin(self.master)
         result = ldapsearch_gc(
@@ -523,8 +529,7 @@ class TestGlobalCatalogInstallation(IntegrationTest):
         ids=['dirsrv main', 'dirsrv gc', 'dirsrv all', 'gsyncd', 'all'])
     def test_syncd_reconnects_after_restart(self, daemons):
         services = {
-            'dirsrv main': 'dirsrv@{}.service'.format(
-                self.master.domain.realm.replace('.', '-')),
+            'dirsrv main': self.main_dirsrv_service,
             'dirsrv gc': gc_dirsrv_service,
             'gsyncd': gsyncd_service
         }
@@ -680,5 +685,76 @@ class TestGlobalCatalogInstallation(IntegrationTest):
                 with xfail_context(
                         True, 'https://github.com/abbra/freeipa/issues/56'):
                     assert not get_changes_in_gc_log(log)
+        finally:
+            tasks.user_del(self.master, user.login, ignore_not_exists=True)
+
+    def test_cookie_file_is_updated_when_gcsync_stopped(self):
+        user = SimpleTestUser('CookieUpdated', 'OnStop')
+        cookie1 = self.validate_and_parse_gcsync_cookie()
+        try:
+            # trigger GC update to increase cookie number
+            tasks.user_add(self.master, user.login, user.first, user.last)
+            self.assert_exists_in_gc(user.cn)
+
+            self.master.run_command(['systemctl', 'stop', gsyncd_service])
+            cookie2 = self.validate_and_parse_gcsync_cookie()
+            assert cookie2 > cookie1
+        finally:
+            with log_tail(self.master, paths.GCSYNCD_LOG) as get_log_tail:
+                self.master.run_command(['systemctl', 'start', gsyncd_service])
+                assert wait_for(
+                    lambda: LOG_MESSAGE_GC_INITIALIZED in get_log_tail(), 30)
+            tasks.user_del(self.master, user.login, ignore_not_exists=True)
+
+    def test_cookie_file_is_updated_when_gcsync_restarted(self):
+        user = SimpleTestUser('CookieUpdated', 'OnRestart')
+        cookie1 = self.validate_and_parse_gcsync_cookie()
+        try:
+            # trigger GC update to increase cookie number
+            tasks.user_add(self.master, user.login, user.first, user.last)
+            self.assert_exists_in_gc(user.cn)
+
+            with log_tail(self.master, paths.GCSYNCD_LOG) as get_log_tail:
+                self.master.run_command(
+                    ['systemctl', 'restart', gsyncd_service])
+                assert wait_for(
+                    lambda: LOG_MESSAGE_GC_INITIALIZED in get_log_tail(), 30)
+            cookie2 = self.validate_and_parse_gcsync_cookie()
+            assert cookie2 > cookie1
+        finally:
+            tasks.user_del(self.master, user.login, ignore_not_exists=True)
+
+    def test_cookie_file_is_updated_when_dirsrv_restarted(self):
+        user = SimpleTestUser('CookieUpdated', 'OnDsRestart')
+        cookie1 = self.validate_and_parse_gcsync_cookie()
+        try:
+            # trigger GC update to increase cookie number
+            tasks.user_add(self.master, user.login, user.first, user.last)
+            self.assert_exists_in_gc(user.cn)
+
+            with log_tail(self.master, paths.GCSYNCD_LOG) as get_log_tail:
+                self.master.run_command(
+                    ['systemctl', 'restart', self.main_dirsrv_service])
+                assert wait_for(
+                    lambda: LOG_MESSAGE_GC_INITIALIZED in get_log_tail(), 90)
+            cookie2 = self.validate_and_parse_gcsync_cookie()
+            assert cookie2 > cookie1
+        finally:
+            tasks.user_del(self.master, user.login, ignore_not_exists=True)
+
+    def test_cookie_file_is_updated_when_ipa_restarted(self):
+        user = SimpleTestUser('CookieUpdated', 'OnIpaRestart')
+        cookie1 = self.validate_and_parse_gcsync_cookie()
+        try:
+            # trigger GC update to increase cookie number
+            tasks.user_add(self.master, user.login, user.first, user.last)
+            self.assert_exists_in_gc(user.cn)
+
+            with log_tail(self.master, paths.GCSYNCD_LOG) as get_log_tail:
+                self.master.run_command(['ipactl', 'restart'])
+                assert wait_for(
+                    lambda: LOG_MESSAGE_GC_INITIALIZED in get_log_tail(), 90)
+            cookie2 = self.validate_and_parse_gcsync_cookie()
+            assert cookie2 > cookie1
         finally:
             tasks.user_del(self.master, user.login, ignore_not_exists=True)
