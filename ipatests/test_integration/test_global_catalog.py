@@ -374,27 +374,21 @@ class TestGlobalCatalogInstallation(IntegrationTest):
             ok_returncode=254)
 
     def test_membership_synchronization(self):
-        user1 = {
-            'uid': 'syncuser1',
-            'first': 'First',
-            'last': 'Syncuser',
-            'cn': 'First Syncuser'
-        }
+        user1 = SimpleTestUser('First', 'Syncuser')
         group1 = 'syncgroup1'
         group2 = 'syncgroup2'
         group3 = 'syncgroup3'
 
         try:
             # check preconditions
-            self.assert_does_not_exist_in_gc(user1['cn'])
+            self.assert_does_not_exist_in_gc(user1.cn)
             self.assert_does_not_exist_in_gc(group1)
             self.assert_does_not_exist_in_gc(group2)
             self.assert_does_not_exist_in_gc(group3)
 
             # user is created
-            tasks.user_add(self.master, user1['uid'],
-                           user1['first'], user1['last'])
-            self.assert_is_member_of_groups(user1['cn'], ['ipausers'])
+            tasks.user_add(self.master, user1.login, user1.first, user1.last)
+            self.assert_is_member_of_groups(user1.cn, ['ipausers'])
 
             # group is created
             tasks.group_add(self.master, group1)
@@ -402,9 +396,9 @@ class TestGlobalCatalogInstallation(IntegrationTest):
             self.assert_group_members_equal(group1, [])
 
             # user added to group
-            self.master.run_command(['ipa', 'group-add-member', group1, '--users', user1['uid']])
-            self.assert_is_member_of_groups(user1['cn'], ['ipausers', group1])
-            self.assert_group_members_equal(group1, [user1['cn']])
+            self.master.run_command(['ipa', 'group-add-member', group1, '--users', user1.login])
+            self.assert_is_member_of_groups(user1.cn, ['ipausers', group1])
+            self.assert_group_members_equal(group1, [user1.cn])
 
             # group added to another group
             tasks.group_add(self.master, group2)
@@ -413,12 +407,12 @@ class TestGlobalCatalogInstallation(IntegrationTest):
             self.assert_is_member_of_groups(group2, [group1])
             self.assert_group_members_equal(group2, [])
             self.assert_is_member_of_groups(group1, [])
-            self.assert_group_members_equal(group1, [user1['cn'], group2])
+            self.assert_group_members_equal(group1, [user1.cn, group2])
 
             # user removed from group
             self.master.run_command(
-                ['ipa', 'group-remove-member', group1, '--users', user1['uid']])
-            self.assert_is_member_of_groups(user1['cn'], ['ipausers'])
+                ['ipa', 'group-remove-member', group1, '--users', user1.login])
+            self.assert_is_member_of_groups(user1.cn, ['ipausers'])
             self.assert_group_members_equal(group1, [group2])
 
             # group removed from another group
@@ -431,28 +425,28 @@ class TestGlobalCatalogInstallation(IntegrationTest):
 
             # user being member of group is deleted
             self.master.run_command(
-                ['ipa', 'group-add-member', group1, '--users', user1['uid']])
-            self.assert_is_member_of_groups(user1['cn'],
+                ['ipa', 'group-add-member', group1, '--users', user1.login])
+            self.assert_is_member_of_groups(user1.cn,
                                             ['ipausers', group1])
-            self.assert_group_members_equal(group1, [user1['cn']])
-            tasks.user_del(self.master, user1['uid'])
-            self.assert_does_not_exist_in_gc(user1['cn'])
+            self.assert_group_members_equal(group1, [user1.cn])
+            tasks.user_del(self.master, user1.login)
+            self.assert_does_not_exist_in_gc(user1.cn)
             self.assert_group_members_equal(group1, [])
 
             # group being member of another group and containing user and
             # group is deleted
             tasks.group_add(self.master, group3)
-            tasks.user_add(self.master, user1['uid'],
-                           user1['first'], user1['last'])
+            tasks.user_add(self.master, user1.login,
+                           user1.first, user1.last)
             self.master.run_command([
-                'ipa', 'group-add-member', group2, '--users', user1['uid'],
+                'ipa', 'group-add-member', group2, '--users', user1.login,
                 '--groups', group1])
             self.master.run_command([
                 'ipa', 'group-add-member', group3, '--groups', group2])
             self.assert_group_members_equal(group1, [])
-            self.assert_group_members_equal(group2, [group1, user1['cn']])
+            self.assert_group_members_equal(group2, [group1, user1.cn])
             self.assert_group_members_equal(group3, [group2])
-            self.assert_is_member_of_groups(user1['cn'], ['ipausers', group2, group3])
+            self.assert_is_member_of_groups(user1.cn, ['ipausers', group2, group3])
             self.assert_is_member_of_groups(group1, [group2, group3])
             self.assert_is_member_of_groups(group2, [group3])
             self.assert_is_member_of_groups(group3, [])
@@ -460,14 +454,14 @@ class TestGlobalCatalogInstallation(IntegrationTest):
             self.assert_does_not_exist_in_gc(group2)
             self.assert_group_members_equal(group1, [])
             self.assert_group_members_equal(group3, [])
-            self.assert_is_member_of_groups(user1['cn'], ['ipausers'])
+            self.assert_is_member_of_groups(user1.cn, ['ipausers'])
             self.assert_is_member_of_groups(group1, [])
             self.assert_is_member_of_groups(group3, [])
         finally:
-            tasks.user_del(self.master, user1['uid'], ignore_not_exists=True)
+            tasks.user_del(self.master, user1.login, ignore_not_exists=True)
             for group in [group1, group2, group3]:
                 tasks.group_del(self.master, group, ignore_not_exists=True)
-        self.assert_does_not_exist_in_gc(user1['cn'])
+        self.assert_does_not_exist_in_gc(user1.cn)
         self.assert_does_not_exist_in_gc(group1)
         self.assert_does_not_exist_in_gc(group2)
         self.assert_does_not_exist_in_gc(group3)
