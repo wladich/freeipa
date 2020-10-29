@@ -13,6 +13,7 @@ from ipaplatform.paths import paths
 from ipatests.pytest_ipa.integration import tasks
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration.firewall import Firewall
+from ipatests.util import xfail_context
 
 from ldif import LDIFRecordList
 
@@ -209,6 +210,15 @@ class TestGlobalCatalogInstallation(IntegrationTest):
         record = self.get_gc_record(user_or_group)
         assert record is not None
         assert normalize_dn(record[0]) == self.make_dn(user_or_group)
+
+    def validate_and_parse_gcsync_cookie(self):
+        cookie_str = self.master.get_file_contents(paths.GC_COOKIE, 'utf-8').strip()
+        fields = cookie_str.split('#')
+        assert fields[0] == '{}:389'.format(self.master.hostname)
+        assert fields[1] == 'cn=Directory Manager:cn=accounts,{}:(|(objectClass=groupofnames)(objectClass=person))'.format(self.master.domain.basedn)
+        sn = int(fields[2])
+        assert sn < 1000000
+        return sn
 
     initial_test_data = {
         'user1': SimpleTestUser('First', 'InitialUser'),
@@ -651,3 +661,24 @@ class TestGlobalCatalogInstallation(IntegrationTest):
             assert wait_for(
                 lambda: LOG_MESSAGE_GC_INITIALIZED in get_log_tail(), 90)
 
+    def test_no_changes_during_restart_after_user_added(self):
+        user = SimpleTestUser('Restart', 'Changes')
+        cookie1 = self.validate_and_parse_gcsync_cookie()
+        try:
+            tasks.user_add(self.master, user.login, user.first, user.last)
+            self.assert_exists_in_gc(user.cn)
+            self.master.run_command(['systemctl', 'stop', gsyncd_service])
+            cookie2 = self.validate_and_parse_gcsync_cookie()
+            assert cookie2 > cookie1
+            with log_tail(self.master, paths.GCSYNCD_LOG) as get_log_tail:
+                self.master.run_command(['systemctl', 'start', gsyncd_service])
+                assert wait_for(
+                    lambda: LOG_MESSAGE_GC_INITIALIZED in get_log_tail(), 30)
+                # allow sync daemon to process possible changes after startup
+                time.sleep(10)
+                log = get_log_tail()
+                with xfail_context(
+                        True, 'https://github.com/abbra/freeipa/issues/56'):
+                    assert not get_changes_in_gc_log(log)
+        finally:
+            tasks.user_del(self.master, user.login, ignore_not_exists=True)
