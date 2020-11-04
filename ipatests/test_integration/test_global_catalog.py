@@ -18,9 +18,9 @@ from ipatests.util import xfail_context
 from ldif import LDIFRecordList
 
 gc_dirsrv_service = 'dirsrv@GLOBAL-CATALOG.service'
-gsyncd_service = 'ipa-gcsyncd.service'
-LOG_MESSAGE_GC_INITIALIZED = 'Initial LDAP dump is done, now synchronizing with GC'
-
+gcsyncd_service = 'ipa-gcsyncd.service'
+LOG_MESSAGE_GC_INITIALIZED = \
+    'Initial LDAP dump is done, now synchronizing with GC'
 
 def is_service_active(host, service):
     res = host.run_command(['systemctl', 'is-active', service],
@@ -256,8 +256,8 @@ class TestGlobalCatalogInstallation(IntegrationTest):
     def test_adtrust_install(self):
         Firewall(self.master).enable_service("freeipa-trust")
         assert not is_service_active(self.master, gc_dirsrv_service)
-        assert not is_service_active(self.master, gsyncd_service)
-        self.master.run_command(['systemctl', 'is-active', gsyncd_service],
+        assert not is_service_active(self.master, gcsyncd_service)
+        self.master.run_command(['systemctl', 'is-active', gcsyncd_service],
                                 ok_returncode=3)
 
         with log_tail(self.master, paths.GCSYNCD_LOG) as get_log_tail:
@@ -267,7 +267,7 @@ class TestGlobalCatalogInstallation(IntegrationTest):
             assert re.search('ports are open.+TCP Ports.+3268: msft-gc.+UDP Ports',
                             res.stdout_text, re.DOTALL)
             assert is_service_active(self.master, gc_dirsrv_service)
-            assert is_service_active(self.master, gsyncd_service)
+            assert is_service_active(self.master, gcsyncd_service)
 
             assert wait_for(
                 lambda: LOG_MESSAGE_GC_INITIALIZED  in get_log_tail(), 30)
@@ -524,16 +524,16 @@ class TestGlobalCatalogInstallation(IntegrationTest):
             ['dirsrv main'],
             ['dirsrv gc'],
             ['dirsrv main', 'dirsrv gc'],
-            ['gsyncd'],
-            ['dirsrv main', 'dirsrv gc', 'dirsrv main', 'dirsrv gc', 'gsyncd']],
-        ids=['dirsrv main', 'dirsrv gc', 'dirsrv all', 'gsyncd', 'all'])
+            ['gcsyncd'],
+            ['dirsrv main', 'dirsrv gc', 'dirsrv main', 'dirsrv gc', 'gcsyncd']],
+        ids=['dirsrv main', 'dirsrv gc', 'dirsrv all', 'gcsyncd', 'all'])
     def test_syncd_reconnects_after_restart(self, daemons):
         services = {
             'dirsrv main': self.main_dirsrv_service,
             'dirsrv gc': gc_dirsrv_service,
-            'gsyncd': gsyncd_service
+            'gcsyncd': gcsyncd_service
         }
-        user = SimpleTestUser('Reconnect', 'MainInstance')
+        user = SimpleTestUser('Test', 'Reconnects')
         for daemon in daemons:
             self.master.run_command(['systemctl', 'stop', services[daemon]])
         try:
@@ -541,7 +541,7 @@ class TestGlobalCatalogInstallation(IntegrationTest):
                 for daemon in daemons:
                     self.master.run_command(
                         ['systemctl', 'start', services[daemon]])
-                if 'dirsrv main' in daemons or 'gsyncd' in daemons:
+                if 'dirsrv main' in daemons or 'gcsyncd' in daemons:
                     assert wait_for(
                         lambda: LOG_MESSAGE_GC_INITIALIZED in get_log_tail(), 90)
                 tasks.user_add(self.master, user.login, user.first,
@@ -668,14 +668,14 @@ class TestGlobalCatalogInstallation(IntegrationTest):
 
     def test_gc_services_managed_by_ipactl(self):
         assert is_service_active(self.master, gc_dirsrv_service)
-        assert is_service_active(self.master, gsyncd_service)
+        assert is_service_active(self.master, gcsyncd_service)
         self.master.run_command(['ipactl', 'stop'])
         assert not is_service_active(self.master, gc_dirsrv_service)
-        assert not is_service_active(self.master, gsyncd_service)
+        assert not is_service_active(self.master, gcsyncd_service)
         with log_tail(self.master, paths.GCSYNCD_LOG) as get_log_tail:
             self.master.run_command(['ipactl', 'start'])
             assert is_service_active(self.master, gc_dirsrv_service)
-            assert is_service_active(self.master, gsyncd_service)
+            assert is_service_active(self.master, gcsyncd_service)
             assert wait_for(
                 lambda: LOG_MESSAGE_GC_INITIALIZED in get_log_tail(), 90)
 
@@ -685,11 +685,11 @@ class TestGlobalCatalogInstallation(IntegrationTest):
         try:
             tasks.user_add(self.master, user.login, user.first, user.last)
             self.assert_exists_in_gc(user.cn)
-            self.master.run_command(['systemctl', 'stop', gsyncd_service])
+            self.master.run_command(['systemctl', 'stop', gcsyncd_service])
             cookie2 = self.validate_and_parse_gcsync_cookie()
             assert cookie2 > cookie1
             with log_tail(self.master, paths.GCSYNCD_LOG) as get_log_tail:
-                self.master.run_command(['systemctl', 'start', gsyncd_service])
+                self.master.run_command(['systemctl', 'start', gcsyncd_service])
                 assert wait_for(
                     lambda: LOG_MESSAGE_GC_INITIALIZED in get_log_tail(), 30)
                 # allow sync daemon to process possible changes after startup
@@ -709,12 +709,12 @@ class TestGlobalCatalogInstallation(IntegrationTest):
             tasks.user_add(self.master, user.login, user.first, user.last)
             self.assert_exists_in_gc(user.cn)
 
-            self.master.run_command(['systemctl', 'stop', gsyncd_service])
+            self.master.run_command(['systemctl', 'stop', gcsyncd_service])
             cookie2 = self.validate_and_parse_gcsync_cookie()
             assert cookie2 > cookie1
         finally:
             with log_tail(self.master, paths.GCSYNCD_LOG) as get_log_tail:
-                self.master.run_command(['systemctl', 'start', gsyncd_service])
+                self.master.run_command(['systemctl', 'start', gcsyncd_service])
                 assert wait_for(
                     lambda: LOG_MESSAGE_GC_INITIALIZED in get_log_tail(), 30)
             tasks.user_del(self.master, user.login, ignore_not_exists=True)
@@ -729,7 +729,7 @@ class TestGlobalCatalogInstallation(IntegrationTest):
 
             with log_tail(self.master, paths.GCSYNCD_LOG) as get_log_tail:
                 self.master.run_command(
-                    ['systemctl', 'restart', gsyncd_service])
+                    ['systemctl', 'restart', gcsyncd_service])
                 assert wait_for(
                     lambda: LOG_MESSAGE_GC_INITIALIZED in get_log_tail(), 30)
             cookie2 = self.validate_and_parse_gcsync_cookie()
