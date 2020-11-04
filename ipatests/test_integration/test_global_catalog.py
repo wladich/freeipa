@@ -563,30 +563,37 @@ class TestGlobalCatalogInstallation(IntegrationTest):
         finally:
             tasks.user_del(self.master, user.login, ignore_not_exists=True)
 
-    def do_sync_on_starup(self, action):
-        self.master.run_command(['systemctl', 'stop', gsyncd_service])
+    def do_sync_on_starup(self, action, service_name):
+        service = {
+            'dirsrv gc': gc_dirsrv_service,
+            'gcsyncd': gcsyncd_service
+        }[service_name]
+
+        self.master.run_command(['systemctl', 'stop', service])
         action()
         with log_tail(self.master, paths.GCSYNCD_LOG) as get_log_tail:
-            self.master.run_command(['systemctl', 'start', gsyncd_service])
+            self.master.run_command(['systemctl', 'start', service])
             assert wait_for(
-                lambda: LOG_MESSAGE_GC_INITIALIZED in get_log_tail(), 30)
+                lambda: LOG_MESSAGE_GC_INITIALIZED in get_log_tail(), 90)
         # allow sync daemon to process possible changes after startup
         time.sleep(10)
         # TODO: check nothing is written to GC instance after startup
 
-    def test_sync_on_startup_user_created(self):
+    @pytest.mark.parametrize('service_name', ['dirsrv gc', 'gcsyncd'])
+    def test_sync_on_startup_user_created(self, service_name):
         user = SimpleTestUser('Startupsync', 'Usercreate')
 
         def action():
             tasks.user_add(self.master, user.login, user.first, user.last)
 
         try:
-            self.do_sync_on_starup(action)
+            self.do_sync_on_starup(action, service_name)
             self.assert_is_member_of_groups(user.cn, ['ipausers'])
         finally:
             tasks.user_del(self.master, user.login, ignore_not_exists=True)
 
-    def test_sync_on_startup_user_created_and_deleted(self):
+    @pytest.mark.parametrize('service_name', ['dirsrv gc', 'gcsyncd'])
+    def test_sync_on_startup_user_created_and_deleted(self, service_name):
         user = SimpleTestUser('Startupsync', 'Usercreate')
 
         def action():
@@ -594,12 +601,13 @@ class TestGlobalCatalogInstallation(IntegrationTest):
             tasks.user_del(self.master, user.login)
 
         try:
-            self.do_sync_on_starup(action)
+            self.do_sync_on_starup(action, service_name)
             self.assert_does_not_exist_in_gc(user.cn)
         finally:
             tasks.user_del(self.master, user.login, ignore_not_exists=True)
 
-    def test_sync_on_startup_user_group_member(self):
+    @pytest.mark.parametrize('service_name', ['dirsrv gc', 'gcsyncd'])
+    def test_sync_on_startup_user_group_member(self, service_name):
         user = SimpleTestUser('Startupsync', 'Usergroupmember')
         group = 'startupsyncusermember'
 
@@ -609,14 +617,15 @@ class TestGlobalCatalogInstallation(IntegrationTest):
             self.master.run_command(['ipa', 'group-add-member', group,
                                      '--users', user.login])
         try:
-            self.do_sync_on_starup(action)
+            self.do_sync_on_starup(action, service_name)
             self.assert_is_member_of_groups(user.cn, ['ipausers', group])
             self.assert_group_members_equal(group, [user.cn])
         finally:
             tasks.user_del(self.master, user.login, ignore_not_exists=True)
             tasks.group_del(self.master, group, ignore_not_exists=True)
 
-    def test_sync_on_startup_complex(self):
+    @pytest.mark.parametrize('service_name', ['dirsrv gc', 'gcsyncd'])
+    def test_sync_on_startup_complex(self, service_name):
         user1 = SimpleTestUser('Startupsync', 'Complex1')
         user2 = SimpleTestUser('Startupsync', 'Complex2')
         group = 'startupsynccomplex'
@@ -629,7 +638,7 @@ class TestGlobalCatalogInstallation(IntegrationTest):
             self.master.run_command(['ipa', 'group-add-member', group,
                                      '--users', user2.login])
         try:
-            self.do_sync_on_starup(action)
+            self.do_sync_on_starup(action, service_name)
             self.assert_does_not_exist_in_gc(user1.cn)
             self.assert_is_member_of_groups(user2.cn, ['ipausers', group])
             self.assert_group_members_equal(group, [user2.cn])
