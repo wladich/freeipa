@@ -8,12 +8,14 @@ from io import StringIO
 import time
 import textwrap
 import pytest
+import json
 
 from ipaplatform.paths import paths
 from ipatests.pytest_ipa.integration import tasks
+from ipatests.pytest_ipa.integration import windows_tasks
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration.firewall import Firewall
-from ipatests.util import xfail_context
+from ipatests.util import xfail_context, wait_for
 
 from ldif import LDIFRecordList
 
@@ -73,13 +75,13 @@ def disable_network_manager_resolv_conf_management(host):
     host.run_command(['systemctl', 'restart', 'NetworkManager.service'])
 
 
-def wait_for(func, timeout):
-    start = time.time()
-    while time.time() < start + timeout:
-        if func():
-            return True
-        time.sleep(1)
-    return False
+def get_windows_logged_on_user(host):
+    res = windows_tasks.winrm_run_powershell_script(
+        host,
+        'Get-WMIObject -class Win32_ComputerSystem -ComputerName 127.0.0.1'
+        '| ConvertTo-Json')
+    return json.loads(res.stdout_text)['UserName']
+
 
 @contextmanager
 def log_tail(host, log_file):
@@ -780,3 +782,150 @@ class TestGlobalCatalogInstallation(IntegrationTest):
             assert cookie2 > cookie1
         finally:
             tasks.user_del(self.master, user.login, ignore_not_exists=True)
+
+    def check_windows_logon_via_autologon(self, host, user, password, domain,
+                                          expected_user):
+        path = r'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+        windows_tasks.registry_add(
+            host, path, 'DefaultUserName', user, 'REG_SZ')
+        windows_tasks.registry_add(
+            host, path, 'DefaultPassword', password, 'REG_SZ')
+        if domain:
+            windows_tasks.registry_add(
+                host, path, 'DefaultDomainName', domain, 'REG_SZ')
+        else:
+            windows_tasks.registry_delete(
+                host, path, 'DefaultDomainName', ignore_missing=True)
+        windows_tasks.registry_add(host, path, 'AutoAdminLogon', '1', 'REG_SZ')
+        windows_tasks.reboot(self.ad_client)
+        wait_for(lambda: get_windows_logged_on_user(host), 30)
+        assert (str(get_windows_logged_on_user(host)).lower() ==
+                expected_user.lower())
+
+    login_test_user_name = 'logintest'
+    login_test_user_password = 'loginTestSecret123'
+
+    @pytest.fixture(scope='function')
+    def login_ipa_user(self):
+        tasks.create_active_user(self.master, self.login_test_user_name,
+                                 self.login_test_user_password)
+        yield
+        tasks.user_del(self.master, self.login_test_user_name)
+
+    def modify_string_case(self, s, modify):
+        method = {
+            'lower': s.lower,
+            'upper': s.upper,
+            'mixed': s.title,
+        }[modify]
+        return method()
+
+    def get_user_name_string_for_login_test(self, case):
+        return self.modify_string_case(self.login_test_user_name, case)
+
+    def get_domain_name_string_for_login_test(self, domain_case, abbreviated):
+        domain = self.master.domain.name
+        if abbreviated:
+            domain = domain.split('.')[0]
+        return self.modify_string_case(domain, domain_case)
+
+    def get_login_string_for_login_test(
+            self, login_string_format, user_name_case, domain_name_case,
+            domain_name_abbreviated):
+        template = {
+            'upn': '{user}@{domain}',
+            'down-level': r'{domain}\{user}'
+        }[login_string_format]
+        user = self.get_user_name_string_for_login_test(user_name_case)
+        domain = self.get_domain_name_string_for_login_test(
+            domain_name_case, domain_name_abbreviated)
+        return template.format(user=user, domain=domain)
+
+    @pytest.mark.parametrize(
+        ['user_case', 'domain_case', 'domain_abbreviated'], [
+        ['lower', 'lower', False],  # user, ipa.test
+        ['lower', 'upper', False],  # user, IPA.TEST
+        ['lower', 'mixed', False],  # user, Ipa.Test
+        ['lower', 'lower', True],   # user, ipa
+        ['lower', 'upper', True],   # user, IPA
+        ['lower', 'mixed', True],   # user, Ipa
+        ['upper', 'upper', False],  # USER, IPA.TEST
+        ['mixed', 'upper', False],  # User, IPA.TEST
+    ], ids=[
+        'user, ipa.test',
+        'user, IPA.TEST',
+        'user, Ipa.Test',
+        'user, ipa',
+        'user, IPA',
+        'user, Ipa',
+        'USER, IPA.TEST',
+        'User, IPA.TEST',
+    ])
+    @pytest.mark.usefixtures('login_ipa_user')
+    def test_login_via_autologon_with_defaultdomain(
+            self, user_case, domain_case, domain_abbreviated):
+        username = self.get_user_name_string_for_login_test(user_case)
+        domain = self.get_domain_name_string_for_login_test(
+            domain_case, domain_abbreviated)
+        expected_username = self.get_login_string_for_login_test(
+            'down-level', 'lower', 'lower', True)
+        self.check_windows_logon_via_autologon(
+            self.ad_client, username, self.login_test_user_password, domain,
+            expected_username)
+
+    @pytest.mark.parametrize(['login_format', 'user_case', 'domain_case',
+                              'domain_abbreviated'], [
+        ['upn', 'lower', 'lower', False],  # user@ipa.test
+        ['upn', 'lower', 'upper', False],  # user@IPA.TEST
+        ['upn', 'lower', 'mixed', False],  # user@Ipa.Test
+
+        ['upn', 'lower', 'lower', True],   # user@ipa
+        ['upn', 'lower', 'upper', True],   # user@IPA
+        ['upn', 'lower', 'mixed', True],   # user@Ipa
+
+        ['down-level', 'lower', 'lower', False],  # ipa.test\user
+        ['down-level', 'lower', 'upper', False],  # IPA.TEST\user
+        ['down-level', 'lower', 'mixed', False],  # Ipa.Test\user
+
+        ['down-level', 'lower', 'lower', True],   # ipa\user
+        ['down-level', 'lower', 'upper', True],   # IPA\user
+        ['down-level', 'lower', 'mixed', True],   # Ipa\user
+
+        ['upn', 'upper', 'lower', False],  # USER@ipa.test
+        ['upn', 'mixed', 'lower', False],  # User@ipa.test
+
+        ['down-level', 'upper', 'upper', False],  # IPA.TEST\USER
+        ['down-level', 'mixed', 'upper', False],  # IPA.TEST\User
+    ], ids= [
+        'user@ipa.test',
+        'user@IPA.TEST',
+        'user@Ipa.Test',
+
+        'user@ipa',
+        'user@IPA',
+        'user@Ipa',
+
+        r'ipa.test\user',
+        r'IPA.TEST\user',
+        r'Ipa.Test\user',
+
+        r'ipa\user',
+        r'IPA\user',
+        r'Ipa\user',
+
+        r'USER@ipa.test',
+        r'User@ipa.test',
+
+        r'IPA.TEST\USER',
+        r'IPA.TEST\User',
+    ])
+    @pytest.mark.usefixtures('login_ipa_user')
+    def test_login_via_autologon_without_defaultdomain(
+            self, login_format, user_case, domain_case, domain_abbreviated):
+        username = self.get_login_string_for_login_test(
+            login_format, user_case, domain_case, domain_abbreviated)
+        expected_username = self.get_login_string_for_login_test(
+            'down-level', 'lower', 'lower', True)
+        self.check_windows_logon_via_autologon(
+            self.ad_client, username, self.login_test_user_password, None,
+            expected_username)
