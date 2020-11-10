@@ -797,20 +797,13 @@ class TestGlobalCatalogInstallation(IntegrationTest):
             windows_tasks.registry_delete(
                 host, path, 'DefaultDomainName', ignore_missing=True)
         windows_tasks.registry_add(host, path, 'AutoAdminLogon', '1', 'REG_SZ')
-        windows_tasks.reboot(self.ad_client)
+        windows_tasks.reboot(host)
         wait_for(lambda: get_windows_logged_on_user(host), 30)
         assert (str(get_windows_logged_on_user(host)).lower() ==
                 expected_user.lower())
 
     login_test_user_name = 'logintest'
     login_test_user_password = 'loginTestSecret123'
-
-    @pytest.fixture(scope='function')
-    def login_ipa_user(self):
-        tasks.create_active_user(self.master, self.login_test_user_name,
-                                 self.login_test_user_password)
-        yield
-        tasks.user_del(self.master, self.login_test_user_name)
 
     def modify_string_case(self, s, modify):
         method = {
@@ -841,6 +834,26 @@ class TestGlobalCatalogInstallation(IntegrationTest):
             domain_name_case, domain_name_abbreviated)
         return template.format(user=user, domain=domain)
 
+    @contextmanager
+    def user_for_login_test(self, ad_controller):
+        tasks.create_active_user(self.master, self.login_test_user_name,
+                                 self.login_test_user_password)
+        if ad_controller:
+            username = self.get_login_string_for_login_test(
+                'down-level', 'lower', 'upper', False)
+            windows_tasks.add_user_to_local_group(
+                self.ad_controller, username, 'Administrators')
+        try:
+            yield
+        finally:
+            if ad_controller:
+                username = self.get_login_string_for_login_test(
+                    'down-level', 'lower', 'upper', False)
+                windows_tasks.remove_user_from_local_group(
+                    self.ad_controller, username, 'Administrators')
+            tasks.user_del(self.master, self.login_test_user_name)
+
+    @pytest.mark.parametrize('hostname', ['ad_controller', 'ad_client'])
     @pytest.mark.parametrize(
         ['user_case', 'domain_case', 'domain_abbreviated'], [
         ['lower', 'lower', False],  # user, ipa.test
@@ -861,20 +874,22 @@ class TestGlobalCatalogInstallation(IntegrationTest):
         'USER, IPA.TEST',
         'User, IPA.TEST',
     ])
-    @pytest.mark.usefixtures('login_ipa_user')
     def test_login_via_autologon_with_defaultdomain(
-            self, user_case, domain_case, domain_abbreviated):
-        username = self.get_user_name_string_for_login_test(user_case)
-        domain = self.get_domain_name_string_for_login_test(
-            domain_case, domain_abbreviated)
-        expected_username = self.get_login_string_for_login_test(
-            'down-level', 'lower', 'lower', True)
-        self.check_windows_logon_via_autologon(
-            self.ad_client, username, self.login_test_user_password, domain,
-            expected_username)
+            self, hostname, user_case, domain_case, domain_abbreviated):
+        with self.user_for_login_test(hostname == 'ad_controller'):
+            host = getattr(self, hostname)
+            username = self.get_user_name_string_for_login_test(user_case)
+            domain = self.get_domain_name_string_for_login_test(
+                domain_case, domain_abbreviated)
+            expected_username = self.get_login_string_for_login_test(
+                'down-level', 'lower', 'lower', True)
+            self.check_windows_logon_via_autologon(
+                host, username, self.login_test_user_password, domain,
+                expected_username)
 
-    @pytest.mark.parametrize(['login_format', 'user_case', 'domain_case',
-                              'domain_abbreviated'], [
+    @pytest.mark.parametrize('hostname', ['ad_controller', 'ad_client'])
+    @pytest.mark.parametrize(
+        ['login_format', 'user_case', 'domain_case','domain_abbreviated'], [
         ['upn', 'lower', 'lower', False],  # user@ipa.test
         ['upn', 'lower', 'upper', False],  # user@IPA.TEST
         ['upn', 'lower', 'mixed', False],  # user@Ipa.Test
@@ -896,7 +911,7 @@ class TestGlobalCatalogInstallation(IntegrationTest):
 
         ['down-level', 'upper', 'upper', False],  # IPA.TEST\USER
         ['down-level', 'mixed', 'upper', False],  # IPA.TEST\User
-    ], ids= [
+    ], ids=[
         'user@ipa.test',
         'user@IPA.TEST',
         'user@Ipa.Test',
@@ -919,13 +934,15 @@ class TestGlobalCatalogInstallation(IntegrationTest):
         r'IPA.TEST\USER',
         r'IPA.TEST\User',
     ])
-    @pytest.mark.usefixtures('login_ipa_user')
     def test_login_via_autologon_without_defaultdomain(
-            self, login_format, user_case, domain_case, domain_abbreviated):
-        username = self.get_login_string_for_login_test(
-            login_format, user_case, domain_case, domain_abbreviated)
-        expected_username = self.get_login_string_for_login_test(
-            'down-level', 'lower', 'lower', True)
-        self.check_windows_logon_via_autologon(
-            self.ad_client, username, self.login_test_user_password, None,
-            expected_username)
+            self, hostname, login_format, user_case, domain_case,
+            domain_abbreviated):
+        with self.user_for_login_test(hostname == 'ad_controller'):
+            host = getattr(self, hostname)
+            username = self.get_login_string_for_login_test(
+                login_format, user_case, domain_case, domain_abbreviated)
+            expected_username = self.get_login_string_for_login_test(
+                'down-level', 'lower', 'lower', True)
+            self.check_windows_logon_via_autologon(
+                host, username, self.login_test_user_password, None,
+                expected_username)
