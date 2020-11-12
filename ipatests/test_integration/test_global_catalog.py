@@ -489,14 +489,16 @@ class TestGlobalCatalogInstallation(IntegrationTest):
         self.assert_does_not_exist_in_gc(group2)
         self.assert_does_not_exist_in_gc(group3)
 
-    @pytest.mark.parametrize(['group_add_args', 'expected_group_type'], [
-        [[], {'ACCOUNT_GROUP', 'SECURITY_ENABLED'}],
-        [['--nonposix'], {'ACCOUNT_GROUP'}],
-        [['--external'], {'RESOURCE_GROUP', 'SECURITY_ENABLED'}]
-    ], ids=[
-        'posix -> global',
-        'non-posix -> global distribution',
-        'external -> domain-local'])
+    @pytest.mark.parametrize([
+        'group_add_args', 'expected_group_type'], [
+
+        pytest.param([], {'ACCOUNT_GROUP', 'SECURITY_ENABLED'},
+                     id='posix -> global'),
+        pytest.param(['--nonposix'], {'ACCOUNT_GROUP'},
+                     id='non-posix -> global distribution'),
+        pytest.param(['--external'], {'RESOURCE_GROUP', 'SECURITY_ENABLED'},
+                     id='external -> domain-local')
+    ])
     def test_group_type_value(self, group_add_args, expected_group_type):
         group_name = 'test_group_type'
         tasks.group_add(self.master, group_name, group_add_args)
@@ -520,15 +522,14 @@ class TestGlobalCatalogInstallation(IntegrationTest):
             tasks.user_del(self.replica, user.login, ignore_not_exists=True)
 
 
-    @pytest.mark.parametrize(
-        'daemons',[
-            ['dirsrv main'],
-            ['dirsrv gc'],
-            ['dirsrv main', 'dirsrv gc'],
-            ['gcsyncd'],
-            ['dirsrv main', 'dirsrv gc', 'dirsrv main', 'dirsrv gc', 'gcsyncd']],
-        ids=['dirsrv main', 'dirsrv gc', 'dirsrv all', 'gcsyncd', 'all'])
-    def test_syncd_reconnects_after_restart(self, daemons):
+    @pytest.mark.parametrize('daemons', [
+        pytest.param(['dirsrv main'], id='main dirsrv'),
+        pytest.param(['dirsrv gc'], id='GC dirsrv'),
+        pytest.param(['dirsrv main', 'dirsrv gc'], id='both dirsrvs'),
+        pytest.param(['gcsyncd'], id='gcsyncd'),
+        pytest.param(['dirsrv main', 'dirsrv gc', 'gcsyncd'], id='all')
+    ])
+    def test_syncd_reconnects_after_daemons_restart(self, daemons):
         services = {
             'dirsrv main': self.main_dirsrv_service,
             'dirsrv gc': gc_dirsrv_service,
@@ -855,23 +856,20 @@ class TestGlobalCatalogInstallation(IntegrationTest):
     @pytest.mark.parametrize('hostname', ['ad_controller', 'ad_client'])
     @pytest.mark.parametrize(
         ['user_case', 'domain_case', 'domain_abbreviated'], [
-        ['lower', 'lower', False],  # user, ipa.test
-        ['lower', 'upper', False],  # user, IPA.TEST
-        ['lower', 'mixed', False],  # user, Ipa.Test
-        ['lower', 'lower', True],   # user, ipa
-        ['lower', 'upper', True],   # user, IPA
-        ['lower', 'mixed', True],   # user, Ipa
-        ['upper', 'upper', False],  # USER, IPA.TEST
-        ['mixed', 'upper', False],  # User, IPA.TEST
-    ], ids=[
-        'user, ipa.test',
-        'user, IPA.TEST',
-        'user, Ipa.Test',
-        'user, ipa',
-        'user, IPA',
-        'user, Ipa',
-        'USER, IPA.TEST',
-        'User, IPA.TEST',
+
+        pytest.param('lower', 'lower', False, id='user, ipa.test',
+                     marks=pytest.mark.xfail(reason='https://github.com/abbra/freeipa/issues/65', strict=True)),
+        pytest.param('lower', 'upper', False, id='user, IPA.TEST'),
+        pytest.param('lower', 'mixed', False, id='user, Ipa.Test',
+                     marks=pytest.mark.xfail(reason='https://github.com/abbra/freeipa/issues/65', strict=True)),
+        pytest.param('lower', 'lower', True, id='user, ipa',
+                     marks=pytest.mark.xfail(reason='https://github.com/abbra/freeipa/issues/65', strict=True)),
+        pytest.param('lower', 'upper', True, id='user, IPA',
+                     marks=pytest.mark.xfail(reason='https://github.com/abbra/freeipa/issues/65', strict=True)),
+        pytest.param('lower', 'mixed', True, id='user, Ipa',
+                     marks=pytest.mark.xfail(reason='https://github.com/abbra/freeipa/issues/65', strict=True)),
+        pytest.param('upper', 'upper', False, id='USER, IPA.TEST'),
+        pytest.param('mixed', 'upper', False, id='User, IPA.TEST'),
     ])
     def test_login_via_autologon_with_defaultdomain(
             self, hostname, user_case, domain_case, domain_abbreviated):
@@ -889,49 +887,36 @@ class TestGlobalCatalogInstallation(IntegrationTest):
     @pytest.mark.parametrize('hostname', ['ad_controller', 'ad_client'])
     @pytest.mark.parametrize(
         ['login_format', 'user_case', 'domain_case','domain_abbreviated'], [
-        ['upn', 'lower', 'lower', False],  # user@ipa.test
-        ['upn', 'lower', 'upper', False],  # user@IPA.TEST
-        ['upn', 'lower', 'mixed', False],  # user@Ipa.Test
 
-        ['upn', 'lower', 'lower', True],   # user@ipa
-        ['upn', 'lower', 'upper', True],   # user@IPA
-        ['upn', 'lower', 'mixed', True],   # user@Ipa
+        pytest.param('upn', 'lower', 'lower', False, id='user@ipa.test'),
+        pytest.param('upn', 'lower', 'upper', False, id='user@IPA.TEST'),
+        pytest.param('upn', 'lower', 'mixed', False, id='user@Ipa.Test'),
 
-        ['down-level', 'lower', 'lower', False],  # ipa.test\user
-        ['down-level', 'lower', 'upper', False],  # IPA.TEST\user
-        ['down-level', 'lower', 'mixed', False],  # Ipa.Test\user
+        pytest.param('upn', 'lower', 'lower', True, id='user@ipa',
+                     marks=pytest.mark.xfail(reason='https://github.com/abbra/freeipa/issues/65', strict=True)),
+        pytest.param('upn', 'lower', 'upper', True, id='user@IPA',
+                     marks=pytest.mark.xfail(reason='https://github.com/abbra/freeipa/issues/65', strict=True)),
+        pytest.param('upn', 'lower', 'mixed', True, id='user@Ipa',
+                     marks=pytest.mark.xfail(reason='https://github.com/abbra/freeipa/issues/65', strict=True)),
 
-        ['down-level', 'lower', 'lower', True],   # ipa\user
-        ['down-level', 'lower', 'upper', True],   # IPA\user
-        ['down-level', 'lower', 'mixed', True],   # Ipa\user
+        pytest.param('down-level', 'lower', 'lower', False, id='ipa.test\\user',
+                     marks=pytest.mark.xfail(reason='https://github.com/abbra/freeipa/issues/65', strict=True)),
+        pytest.param('down-level', 'lower', 'upper', False, id='IPA.TEST\\user'),
+        pytest.param('down-level', 'lower', 'mixed', False, id='Ipa.Test\\user',
+                     marks=pytest.mark.xfail(reason='https://github.com/abbra/freeipa/issues/65', strict=True)),
 
-        ['upn', 'upper', 'lower', False],  # USER@ipa.test
-        ['upn', 'mixed', 'lower', False],  # User@ipa.test
+        pytest.param('down-level', 'lower', 'lower', True, id='ipa\\user',
+                     marks=pytest.mark.xfail(reason='https://github.com/abbra/freeipa/issues/65', strict=True)),
+        pytest.param('down-level', 'lower', 'upper', True, id='IPA\\user',
+                     marks=pytest.mark.xfail(reason='https://github.com/abbra/freeipa/issues/65', strict=True)),
+        pytest.param('down-level', 'lower', 'mixed', True, id='Ipa\\user',
+                     marks=pytest.mark.xfail(reason='https://github.com/abbra/freeipa/issues/65', strict=True)),
 
-        ['down-level', 'upper', 'upper', False],  # IPA.TEST\USER
-        ['down-level', 'mixed', 'upper', False],  # IPA.TEST\User
-    ], ids=[
-        'user@ipa.test',
-        'user@IPA.TEST',
-        'user@Ipa.Test',
+        pytest.param('upn', 'upper', 'lower', False, id='USER@ipa.test'),
+        pytest.param('upn', 'mixed', 'lower', False, id='User@ipa.test'),
 
-        'user@ipa',
-        'user@IPA',
-        'user@Ipa',
-
-        r'ipa.test\user',
-        r'IPA.TEST\user',
-        r'Ipa.Test\user',
-
-        r'ipa\user',
-        r'IPA\user',
-        r'Ipa\user',
-
-        r'USER@ipa.test',
-        r'User@ipa.test',
-
-        r'IPA.TEST\USER',
-        r'IPA.TEST\User',
+        pytest.param('down-level', 'upper', 'upper', False, id='IPA.TEST\\USER'),
+        pytest.param('down-level', 'mixed', 'upper', False, id='IPA.TEST\\User'),
     ])
     def test_login_via_autologon_without_defaultdomain(
             self, hostname, login_format, user_case, domain_case,
