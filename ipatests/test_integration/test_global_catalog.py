@@ -329,14 +329,15 @@ class TestGlobalCatalogInstallation(IntegrationTest):
 
     @pytest.fixture(scope='function')
     def access_test_users(self):
-        ipa_user = {
-                'login': 'ipa_user',
-                'password': self.master.config.admin_password
-            }
-        tasks.create_active_user(self.master,
-                                 ipa_user['login'], ipa_user['password'])
+        ipa_user = SimpleTestUser('Access', 'Test')
+        tasks.create_active_user(
+            self.master, ipa_user.login, ipa_user.password,
+            ipa_user.first, ipa_user.last)
         yield {
-            'ipa': ipa_user,
+            'ipa': {
+                'login': ipa_user.login,
+                'password': ipa_user.password,
+            },
             'ipa_admin': {
                 'login': 'admin',
                 'password': self.master.config.admin_password
@@ -346,7 +347,7 @@ class TestGlobalCatalogInstallation(IntegrationTest):
                 'password': 'Secret123'
             }
         }
-        tasks.user_del(self.master, ipa_user['login'])
+        tasks.user_del(self.master, ipa_user.login)
 
     @pytest.mark.parametrize('host', ['master', 'client', 'replica'])
     @pytest.mark.parametrize('user_type', ['ipa', 'ipa_admin', 'ad'])
