@@ -510,20 +510,14 @@ class TestGlobalCatalogInstallation(IntegrationTest):
                                     ok_returncode=[0, 2])
 
     def test_gc_updated_when_changes_synced_from_replica(self):
-        user = {
-            'login': 'replicasync',
-            'first': 'Replica',
-            'last': 'Sync',
-            'cn': 'Replica Sync'
-        }
-        tasks.kinit_admin(self.replica)
-        tasks.user_add(self.replica, user['login'], user['first'], user['last'])
+        user = SimpleTestUser('Replica', 'Sync')
+        tasks.user_add(self.replica, user.login, user.first, user.last)
         try:
-            self.assert_exists_in_gc(user['cn'])
-            tasks.user_del(self.replica, user['login'])
-            self.assert_does_not_exist_in_gc(user['cn'])
+            self.assert_exists_in_gc(user.cn)
+            tasks.user_del(self.replica, user.login)
+            self.assert_does_not_exist_in_gc(user.cn)
         finally:
-            tasks.user_del(self.replica, user['login'], ignore_not_exists=True)
+            tasks.user_del(self.replica, user.login, ignore_not_exists=True)
 
 
     @pytest.mark.parametrize(
