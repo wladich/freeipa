@@ -2431,15 +2431,74 @@ static bool fill_pdb_trusted_domain(TALLOC_CTX *mem_ctx,
 	struct pdb_trusted_domain *td;
 	struct dom_sid *sid = NULL;
 	enum idmap_error_code err;
+	char *strdn = NULL;
+	char *dnl = NULL;
+	int rc = 0;
+	int count = 0;
+	char *parent_domain = NULL;
+	LDAPDN dn = NULL;
 
 	if (entry == NULL) {
 		return false;
 	}
 
-	td = talloc_zero(mem_ctx, struct pdb_trusted_domain);
-	if (td == NULL) {
+	strdn = ldap_get_dn(priv2ld(ipasam_state), entry);
+	if (strdn == NULL) {
+		DEBUG(1, ("Couldn't retrieve DN of the trusted domain entry\n"));
 		return false;
 	}
+
+	dnl = strcasestr(strdn, ipasam_state->trust_dn);
+	if (dnl == NULL) {
+		DEBUG(1, ("DN %s of trusted domain entry is not under %s\n",
+			  strdn,
+			  ipasam_state->trust_dn));
+		free(strdn);
+		return false;
+	}
+
+	td = talloc_zero(mem_ctx, struct pdb_trusted_domain);
+	if (td == NULL) {
+		free(strdn);
+		return false;
+	}
+
+	/* dnl points to the begining of cn=ad,cn=trusts,... and we need
+	 * to go one character back and turn ',' into end of string. */
+	dnl--;
+	dnl[0] = '\0';
+
+	/* Now strdn has at most two RDNs:
+	 * - there is one RDN for the directly trusted one
+	 * - there are two RDNs for a subdomain
+	 */
+	rc = ldap_str2dn(strdn, &dn, LDAP_DN_FORMAT_LDAPV3);
+	if (rc) {
+		free(strdn);
+		return false;
+	}
+
+	for (count = 0; dn[count] != NULL; count++);
+
+	/* For subdomains, we must set parent domain */
+	if (count < 1 || count > 2) {
+		DEBUG(1, ("LDAP object with DN %s,%s "
+			  "cannot be used as a trusted domain\n",
+			  strdn, ipasam_state->trust_dn));
+		ldap_dnfree(dn);
+		free(strdn);
+		TALLOC_FREE(td);
+		return false;
+
+	}
+
+	count--;
+	parent_domain = talloc_asprintf(td, "%*s",
+					dn[count][0]->la_value.bv_len,
+					dn[count][0]->la_value.bv_val);
+
+	ldap_dnfree(dn);
+	free(strdn);
 
 	/* All attributes are MAY */
 
@@ -2479,12 +2538,17 @@ static bool fill_pdb_trusted_domain(TALLOC_CTX *mem_ctx,
 			  LDAP_ATTRIBUTE_FLAT_NAME));
 	}
 
+	td->domain_name = parent_domain;
+#if 0
+	/* Ignore LDAP_ATTRIBUTE_TRUST_PARTNER as in FreeIPA it is always set to
+	 * the domain name itself */
 	td->domain_name = get_single_attribute(td, priv2ld(ipasam_state), entry,
 					       LDAP_ATTRIBUTE_TRUST_PARTNER);
 	if (td->domain_name == NULL) {
 		DEBUG(9, ("Attribute %s not present.\n",
 			  LDAP_ATTRIBUTE_TRUST_PARTNER));
 	}
+#endif
 
 	res = get_uint32_t_from_ldap_msg(ipasam_state, entry,
 					 LDAP_ATTRIBUTE_TRUST_DIRECTION,
