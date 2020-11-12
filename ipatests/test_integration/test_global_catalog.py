@@ -179,6 +179,9 @@ class TestGlobalCatalogInstallation(IntegrationTest):
         disable_network_manager_resolv_conf_management(cls.replica)
 
         setup_debug_log_for_global_gatalog(cls.master)
+        for host in [cls.master, cls.client]:
+            host.run_command(['dnf', 'install', '-y', 'python3-winrm',
+                                    'python3-requests-kerberos'])
 
     @property
     def main_dirsrv_service(self):
@@ -989,3 +992,22 @@ class TestGlobalCatalogInstallation(IntegrationTest):
                     (username, self.login_test_user_password), transport='ntlm')
             res = session.run_cmd('whoami')
             assert res.std_out.decode('utf-8').strip() == self.get_login_string_for_login_test('down-level', 'lower', 'lower', False)
+
+    @pytest.mark.parametrize('target_host', ['ad_controller', 'ad_client'])
+    @pytest.mark.parametrize('src_host', ['master', 'client'])
+    def test_login_via_winrm_from_linux_with_kerberos_ticket(self, src_host, target_host):
+        src_host = getattr(self, src_host)
+        target_host = getattr(self, target_host)
+        script = textwrap.dedent('''
+            import winrm
+            sess = winrm.Session('{host}', ('{user}', ''), transport='kerberos')
+            res = sess.run_cmd('whoami')
+            print(res.std_out.decode('utf-8'))
+        '''.format(host=target_host.hostname,
+                   user=self.get_login_string_for_login_test(
+                       'upn', 'lower', 'upper', False)))
+        with self.user_for_login_test(target_host, ['Administrators']):
+            tasks.kinit_as_user(src_host, self.login_test_user_name,
+                                self.login_test_user_password)
+            res = src_host.run_command(['python', '-c', script])
+            assert res.stdout_text.strip() == self.get_login_string_for_login_test('down-level', 'lower', 'lower', True)
