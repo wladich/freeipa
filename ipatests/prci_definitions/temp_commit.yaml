@@ -78,4 +78,4 @@ jobs:
         timeout: 7200
         topology: *adroot_adroot-client_master_replica_client
         update_packages: True
-        post_setup_script: "dnf copr enable -y abbra/gc-wip && dnf update -y --exclude=freeipa-*,python*-ipa*"
+        post_setup_script: "dnf copr enable -y abbra/gc-wip && dnf update -y --nogpgcheck --exclude=freeipa-*,python*-ipa*"
