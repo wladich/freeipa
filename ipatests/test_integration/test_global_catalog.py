@@ -322,6 +322,10 @@ class TestGlobalCatalogInstallation(IntegrationTest):
             self.master, self.ad_controller.domain.name,
             extra_args=['--two-way=True'])
         tasks.configure_ipa_client_for_ad_trust(self.client)
+        win_admin = '{}@{}'.format(self.ad_controller.ssh_username,
+                                   self.ad_controller.domain.realm)
+        self.master.run_command(['ipa', 'idoverrideuser-add',
+                                 'Default Trust View', win_admin])
 
     @pytest.fixture(scope='function')
     def access_test_users(self):
