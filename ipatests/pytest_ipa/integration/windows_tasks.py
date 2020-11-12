@@ -86,8 +86,15 @@ def set_autologon(host, login, password):
 
 
 def add_user_to_local_group(host, user, group):
-    host.run_command(['net', 'localgroup', group, user, '/add'])
+    winrm_run_command(host, ['net', 'localgroup', group, user, '/add'])
 
 
 def remove_user_from_local_group(host, user, group):
-     host.run_command(['net', 'localgroup', group, user, '/delete'])
+    winrm_run_command(host, ['net', 'localgroup', group, user, '/delete'])
+
+def add_user_to_domain_group(host, user, group):
+    winrm_run_command(host, ['net', 'group', group, user, '/add'])
+
+
+def remove_user_from_domain_group(host, user, group):
+    winrm_run_command(host, ['net', 'group', group, user, '/delete'])
