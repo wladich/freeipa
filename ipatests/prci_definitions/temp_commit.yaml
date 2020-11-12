@@ -75,7 +75,7 @@ jobs:
         build_url: '{fedora-latest/build_url}'
         test_suite: test_integration/test_global_catalog.py
         template: *ci-master-latest
-        timeout: 7200
+        timeout: 20000
         topology: *adroot_adroot-client_master_replica_client
         update_packages: True
         post_setup_script: "dnf copr enable -y abbra/gc-wip && dnf update -y --nogpgcheck --exclude=freeipa-*,python*-ipa*"
