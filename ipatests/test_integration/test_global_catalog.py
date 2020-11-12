@@ -9,6 +9,7 @@ import time
 import textwrap
 import pytest
 import json
+import winrm
 import string
 import random
 
@@ -845,22 +846,25 @@ class TestGlobalCatalogInstallation(IntegrationTest):
         return template.format(user=user, domain=domain)
 
     @contextmanager
-    def user_for_login_test(self, ad_controller):
-        tasks.create_active_user(self.master, self.login_test_user_name,
-                                 self.login_test_user_password)
-        if ad_controller:
+    def user_for_login_test(self, windows_host, windows_local_groups):
+        login = self.login_test_user_name
+        tasks.create_active_user(self.master, login, self.login_test_user_password,
+                                 first=login, last='LoginTest')
+        if windows_local_groups:
             username = self.get_login_string_for_login_test(
                 'down-level', 'lower', 'upper', False)
-            windows_tasks.add_user_to_local_group(
-                self.ad_controller, username, 'Administrators')
+            for group in windows_local_groups:
+                windows_tasks.add_user_to_local_group(
+                    windows_host, username, group)
         try:
             yield
         finally:
-            if ad_controller:
+            if windows_local_groups:
                 username = self.get_login_string_for_login_test(
                     'down-level', 'lower', 'upper', False)
-                windows_tasks.remove_user_from_local_group(
-                    self.ad_controller, username, 'Administrators')
+                for group in windows_local_groups:
+                    windows_tasks.remove_user_from_local_group(
+                        windows_host, username, group)
             tasks.user_del(self.master, self.login_test_user_name)
 
     @pytest.mark.parametrize('hostname', ['ad_controller', 'ad_client'])
@@ -883,13 +887,14 @@ class TestGlobalCatalogInstallation(IntegrationTest):
     ])
     def test_login_via_autologon_with_defaultdomain(
             self, hostname, user_case, domain_case, domain_abbreviated):
-        with self.user_for_login_test(hostname == 'ad_controller'):
-            host = getattr(self, hostname)
-            username = self.get_user_name_string_for_login_test(user_case)
-            domain = self.get_domain_name_string_for_login_test(
-                domain_case, domain_abbreviated)
-            expected_username = self.get_login_string_for_login_test(
-                'down-level', 'lower', 'lower', True)
+        host = getattr(self, hostname)
+        username = self.get_user_name_string_for_login_test(user_case)
+        domain = self.get_domain_name_string_for_login_test(
+            domain_case, domain_abbreviated)
+        expected_username = self.get_login_string_for_login_test(
+            'down-level', 'lower', 'lower', True)
+        with self.user_for_login_test(host,
+            ['Administrators'] if hostname == 'ad_controller' else None):
             self.check_windows_logon_via_autologon(
                 host, username, self.login_test_user_password, domain,
                 expected_username)
@@ -931,12 +936,56 @@ class TestGlobalCatalogInstallation(IntegrationTest):
     def test_login_via_autologon_without_defaultdomain(
             self, hostname, login_format, user_case, domain_case,
             domain_abbreviated):
-        with self.user_for_login_test(hostname == 'ad_controller'):
-            host = getattr(self, hostname)
-            username = self.get_login_string_for_login_test(
-                login_format, user_case, domain_case, domain_abbreviated)
-            expected_username = self.get_login_string_for_login_test(
-                'down-level', 'lower', 'lower', True)
+        host = getattr(self, hostname)
+        username = self.get_login_string_for_login_test(
+            login_format, user_case, domain_case, domain_abbreviated)
+        expected_username = self.get_login_string_for_login_test(
+            'down-level', 'lower', 'lower', True)
+        with self.user_for_login_test(host,
+            ['Administrators'] if hostname == 'ad_controller' else None):
             self.check_windows_logon_via_autologon(
                 host, username, self.login_test_user_password, None,
                 expected_username)
+
+    @pytest.mark.parametrize('hostname', ['ad_controller', 'ad_client'])
+    @pytest.mark.parametrize([
+        'login_format', 'user_case', 'domain_case','domain_abbreviated'], [
+
+        pytest.param('upn', 'lower', 'lower', False, id='user@ipa.test'),
+        pytest.param('upn', 'lower', 'upper', False, id='user@IPA.TEST'),
+        pytest.param('upn', 'lower', 'mixed', False, id='user@Ipa.Test'),
+
+        pytest.param('upn', 'lower', 'lower', True, id='user@ipa', marks=pytest.mark.xfail(
+            reason='https://gitlab.com/samba-team/samba/-/merge_requests/1677', strict=True)),
+        pytest.param('upn', 'lower', 'upper', True, id='user@IPA', marks=pytest.mark.xfail(
+            reason='https://gitlab.com/samba-team/samba/-/merge_requests/1677', strict=True)),
+        pytest.param('upn', 'lower', 'mixed', True, id='user@Ipa', marks=pytest.mark.xfail(
+            reason='https://gitlab.com/samba-team/samba/-/merge_requests/1677', strict=True)),
+
+        pytest.param('down-level', 'lower', 'lower', False, id='ipa.test\\user'),
+        pytest.param('down-level', 'lower', 'upper', False, id='IPA.TEST\\user'),
+        pytest.param('down-level', 'lower', 'mixed', False, id='Ipa.Test\\user'),
+
+        pytest.param('down-level', 'lower', 'lower', True, id='ipa\\user'),
+        pytest.param('down-level', 'lower', 'upper', True, id='IPA\\user'),
+        pytest.param('down-level', 'lower', 'mixed', True, id='Ipa\\user'),
+
+        pytest.param('upn', 'upper', 'lower', False, id='USER@ipa.test'),
+        pytest.param('upn', 'mixed', 'lower', False, id='User@ipa.test'),
+
+        pytest.param('down-level', 'upper', 'upper', False, id='IPA.TEST\\USER'),
+        pytest.param('down-level', 'mixed', 'upper', False, id='IPA.TEST\\User'),
+    ])
+    def test_login_via_winrm_from_linux_with_password(
+            self, hostname, login_format, user_case, domain_case,
+            domain_abbreviated):
+        host = getattr(self, hostname)
+        username = self.get_login_string_for_login_test(
+            login_format, user_case, domain_case, domain_abbreviated)
+
+        with self.user_for_login_test(host, ['Administrators']):
+            session = winrm.Session(
+                    host.external_hostname,
+                    (username, self.login_test_user_password), transport='ntlm')
+            res = session.run_cmd('whoami')
+            assert res.std_out.decode('utf-8').strip() == self.get_login_string_for_login_test('down-level', 'lower', 'lower', False)
