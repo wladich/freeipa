@@ -9,6 +9,8 @@ import time
 import textwrap
 import pytest
 import json
+import string
+import random
 
 from ipaplatform.paths import paths
 from ipatests.pytest_ipa.integration import tasks
@@ -802,7 +804,15 @@ class TestGlobalCatalogInstallation(IntegrationTest):
         assert (str(get_windows_logged_on_user(host)).lower() ==
                 expected_user.lower())
 
-    login_test_user_name = 'logintest'
+    _login_test_user_name = None
+    @property
+    def login_test_user_name(self):
+        if self._login_test_user_name is None:
+            letters = string.ascii_lowercase
+            rand_str = ''.join(random.choice(letters) for _ in range(6))
+            self._login_test_user_name = 'logintest_' + rand_str
+        return self._login_test_user_name
+
     login_test_user_password = 'loginTestSecret123'
 
     def modify_string_case(self, s, modify):
