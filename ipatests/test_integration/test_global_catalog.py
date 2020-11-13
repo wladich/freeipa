@@ -1011,3 +1011,61 @@ class TestGlobalCatalogInstallation(IntegrationTest):
                                 self.login_test_user_password)
             res = src_host.run_command(['python', '-c', script])
             assert res.stdout_text.strip() == self.get_login_string_for_login_test('down-level', 'lower', 'lower', True)
+
+    @pytest.mark.parametrize(
+        ['src_host', 'target_host'],
+        [['ad_controller', 'ad_client'], ['ad_client', 'ad_controller']])
+    @pytest.mark.parametrize([
+        'login_format', 'user_case', 'domain_case', 'domain_abbreviated'], [
+
+        pytest.param('upn', 'lower', 'lower', False, id='user@ipa.test'),
+        pytest.param('upn', 'lower', 'upper', False, id='user@IPA.TEST'),
+        pytest.param('upn', 'lower', 'mixed', False, id='user@Ipa.Test'),
+
+        pytest.param('upn', 'lower', 'lower', True, id='user@ipa', marks=pytest.mark.xfail(
+            reason='https://gitlab.com/samba-team/samba/-/merge_requests/1677', strict=True)),
+        pytest.param('upn', 'lower', 'upper', True, id='user@IPA', marks=pytest.mark.xfail(
+            reason='https://gitlab.com/samba-team/samba/-/merge_requests/1677', strict=True)),
+        pytest.param('upn', 'lower', 'mixed', True, id='user@Ipa', marks=pytest.mark.xfail(
+            reason='https://gitlab.com/samba-team/samba/-/merge_requests/1677', strict=True)),
+
+        pytest.param('down-level', 'lower', 'lower', False,
+                     id='ipa.test\\user', marks=pytest.mark.xfail(
+            reason='https://gitlab.com/samba-team/samba/-/merge_requests/1677', strict=True)),
+        pytest.param('down-level', 'lower', 'upper', False),
+        pytest.param('down-level', 'lower', 'mixed', False,
+                     id='Ipa.Test\\user', marks=pytest.mark.xfail(
+            reason='https://gitlab.com/samba-team/samba/-/merge_requests/1677', strict=True)),
+
+        pytest.param('down-level', 'lower', 'lower', True, id='ipa\\user', marks=pytest.mark.xfail(
+            reason='https://gitlab.com/samba-team/samba/-/merge_requests/1677', strict=True)),
+        pytest.param('down-level', 'lower', 'upper', True, id='IPA\\user', marks=pytest.mark.xfail(
+            reason='https://gitlab.com/samba-team/samba/-/merge_requests/1677', strict=True)),
+        pytest.param('down-level', 'lower', 'mixed', True, id='Ipa\\user', marks=pytest.mark.xfail(
+            reason='https://gitlab.com/samba-team/samba/-/merge_requests/1677', strict=True)),
+
+        pytest.param('upn', 'upper', 'lower', False, id='USER@ipa.test'),
+        pytest.param('upn', 'mixed', 'lower', False, id='User@ipa.test'),
+
+        pytest.param('down-level', 'upper', 'upper', False,
+                     id='IPA.TEST\\USER'),
+        pytest.param('down-level', 'mixed', 'upper', False,
+                     id='IPA.TEST\\User'),
+    ])
+    def test_login_via_winrm_from_windows(self, src_host, target_host,
+                                          login_format, user_case, domain_case,
+                                          domain_abbreviated):
+        src_host = getattr(self, src_host)
+        target_host = getattr(self, target_host)
+        with self.user_for_login_test(target_host, ['Administrators']):
+            username = self.get_login_string_for_login_test(
+                login_format, user_case, domain_case, domain_abbreviated)
+            winrs_cmd = ['winrs.exe',
+                         '-r:{}'.format(target_host.hostname),
+                         '-u:{}'.format(username),
+                         '-p:{}'.format(self.login_test_user_password)]
+            res = windows_tasks.winrm_run_command(
+                src_host, winrs_cmd + ['whoami'])
+            expected = self.get_login_string_for_login_test(
+                'down-level', 'lower', 'lower', True)
+            assert res.stdout_text.strip() == expected
