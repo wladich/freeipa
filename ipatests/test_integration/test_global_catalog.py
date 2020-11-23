@@ -606,7 +606,7 @@ class TestGlobalCatalogInstallation(IntegrationTest):
         finally:
             tasks.user_del(self.master, user.login, ignore_not_exists=True)
 
-    def do_sync_on_starup(self, action, service_name):
+    def check_sync_on_startup(self, action, check, cleanup, service_name):
         service = {
             'dirsrv gc': gc_dirsrv_service,
             'gcsyncd': gcsyncd_service
@@ -614,13 +614,19 @@ class TestGlobalCatalogInstallation(IntegrationTest):
 
         self.master.run_command(['systemctl', 'stop', service])
         action()
-        with log_tail(self.master, paths.GCSYNCD_LOG) as get_log_tail:
-            self.master.run_command(['systemctl', 'start', service])
-            assert wait_for(
-                lambda: LOG_MESSAGE_GC_INITIALIZED in get_log_tail(), 90)
-        # allow sync daemon to process possible changes after startup
-        time.sleep(10)
-        # TODO: check nothing is written to GC instance after startup
+        try:
+            with log_tail(self.master, paths.GCSYNCD_LOG) as get_log_tail:
+                self.master.run_command(['systemctl', 'start', service])
+                assert wait_for(
+                    lambda: LOG_MESSAGE_GC_INITIALIZED in get_log_tail(), 90)
+                log = get_log_tail()
+                check()
+                # allow sync daemon to process possible changes after startup
+                time.sleep(10)
+                assert not get_changes_in_gc_log(
+                    log[log.index(LOG_MESSAGE_GC_INITIALIZED):])
+        finally:
+            cleanup()
 
     @pytest.mark.parametrize('service_name', ['dirsrv gc', 'gcsyncd'])
     def test_sync_on_startup_user_created(self, service_name):
@@ -629,11 +635,13 @@ class TestGlobalCatalogInstallation(IntegrationTest):
         def action():
             tasks.user_add(self.master, user.login, user.first, user.last)
 
-        try:
-            self.do_sync_on_starup(action, service_name)
+        def check():
             self.assert_is_member_of_groups(user.cn, ['ipausers'])
-        finally:
+
+        def cleanup():
             tasks.user_del(self.master, user.login, ignore_not_exists=True)
+
+        self.check_sync_on_startup(action, check, cleanup, service_name)
 
     @pytest.mark.parametrize('service_name', ['dirsrv gc', 'gcsyncd'])
     def test_sync_on_startup_user_created_and_deleted(self, service_name):
@@ -643,11 +651,13 @@ class TestGlobalCatalogInstallation(IntegrationTest):
             tasks.user_add(self.master, user.login, user.first, user.last)
             tasks.user_del(self.master, user.login)
 
-        try:
-            self.do_sync_on_starup(action, service_name)
+        def check():
             self.assert_does_not_exist_in_gc(user.cn)
-        finally:
+
+        def cleanup():
             tasks.user_del(self.master, user.login, ignore_not_exists=True)
+
+        self.check_sync_on_startup(action, check, cleanup, service_name)
 
     @pytest.mark.parametrize('service_name', ['dirsrv gc', 'gcsyncd'])
     def test_sync_on_startup_user_group_member(self, service_name):
@@ -659,15 +669,22 @@ class TestGlobalCatalogInstallation(IntegrationTest):
             tasks.group_add(self.master, group)
             self.master.run_command(['ipa', 'group-add-member', group,
                                      '--users', user.login])
-        try:
-            self.do_sync_on_starup(action, service_name)
+
+        def check():
             self.assert_is_member_of_groups(user.cn, ['ipausers', group])
             self.assert_group_members_equal(group, [user.cn])
-        finally:
+
+        def cleanup():
             tasks.user_del(self.master, user.login, ignore_not_exists=True)
             tasks.group_del(self.master, group, ignore_not_exists=True)
 
-    @pytest.mark.parametrize('service_name', ['dirsrv gc', 'gcsyncd'])
+        self.check_sync_on_startup(action, check, cleanup, service_name)
+
+    @pytest.mark.parametrize('service_name', [
+        pytest.param('dirsrv gc'),
+        pytest.param('gcsyncd', marks=pytest.mark.skip(
+            reason='https://github.com/abbra/freeipa/issues/60'))
+    ])
     def test_sync_on_startup_complex(self, service_name):
         user1 = SimpleTestUser('Startupsync', 'Complex1')
         user2 = SimpleTestUser('Startupsync', 'Complex2')
@@ -680,15 +697,18 @@ class TestGlobalCatalogInstallation(IntegrationTest):
             tasks.group_add(self.master, group)
             self.master.run_command(['ipa', 'group-add-member', group,
                                      '--users', user2.login])
-        try:
-            self.do_sync_on_starup(action, service_name)
+
+        def check():
             self.assert_does_not_exist_in_gc(user1.cn)
             self.assert_is_member_of_groups(user2.cn, ['ipausers', group])
             self.assert_group_members_equal(group, [user2.cn])
-        finally:
+
+        def cleanup():
             tasks.user_del(self.master, user1.login, ignore_not_exists=True)
             tasks.user_del(self.master, user2.login, ignore_not_exists=True)
             tasks.group_del(self.master, group, ignore_not_exists=True)
+
+        self.check_sync_on_startup(action, check, cleanup, service_name)
 
     def test_repeated_adtrust_install(self):
         user1 = SimpleTestUser('RepeatedInstall', 'First')
