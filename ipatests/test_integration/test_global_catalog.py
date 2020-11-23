@@ -709,9 +709,12 @@ class TestGlobalCatalogInstallation(IntegrationTest):
                 assert log.count(LOG_MESSAGE_GC_INITIALIZED) == 1
                 # FIXME: uncomment when https://github.com/abbra/freeipa/issues/56 is fixed
                 # assert not get_changes_in_gc_log(log)
-                # FIXME: ignore unimportant errors, uncomment
-                # assert 'ERROR' not in log
+                error_to_ignore = "Can't contact LDAP server"
+                errors = [s for s in log.splitlines() if 'ERROR' in s and
+                          error_to_ignore not in s]
+                assert not errors
 
+            self.assert_exists_in_gc(user1.cn)
             tasks.user_add(self.master, user2.login, user2.first, user2.last)
             self.assert_exists_in_gc(user2.cn)
         finally:
