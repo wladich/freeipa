@@ -758,9 +758,7 @@ class TestGlobalCatalogInstallation(IntegrationTest):
                 # allow sync daemon to process possible changes after startup
                 time.sleep(10)
                 log = get_log_tail()
-                with xfail_context(
-                        True, 'https://github.com/abbra/freeipa/issues/56'):
-                    assert not get_changes_in_gc_log(log)
+                assert not get_changes_in_gc_log(log)
         finally:
             tasks.user_del(self.master, user.login, ignore_not_exists=True)
 
