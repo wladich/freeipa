@@ -57,18 +57,6 @@ def ldapsearch_gc(client_host, server_hostname, scope='base', base=None,
     return records.all_records
 
 
-def normalize_dn(path):
-    items = path.split(',')
-    normalized = []
-    for item in items:
-        k, v = item.split('=', 1)
-        k = k.lower()
-        if k == 'cn':
-            v = v.lower()
-        normalized.append('{}={}'.format(k, v))
-    return ','.join(normalized)
-
-
 def disable_network_manager_resolv_conf_management(host):
     content = textwrap.dedent('''
         [main]
@@ -233,13 +221,13 @@ class TestGlobalCatalogInstallation(IntegrationTest):
         return result[0] if result else None
 
     def make_dn(self, user_or_group):
-        return normalize_dn('cn={},cn=Users,{}'.format(
-            user_or_group, self.master.domain.basedn))
+        return 'cn={},cn=users,{}'.format(
+            user_or_group, self.master.domain.basedn)
 
     def assert_is_member_of_groups(self, user_or_group, expected_groups):
         record = self.get_gc_record(user_or_group)
         assert record is not None
-        member_of = [normalize_dn(g.decode('utf-8'))
+        member_of = [g.decode('utf-8')
                      for g in record[1].get('memberOf', [])]
         expected_member_of = [self.make_dn(group) for group in expected_groups]
         assert set(expected_member_of) == set(member_of)
@@ -247,7 +235,7 @@ class TestGlobalCatalogInstallation(IntegrationTest):
     def assert_group_members_equal(self, group, expected_members):
         record = self.get_gc_record(group)
         assert record is not None
-        members = [normalize_dn(m.decode('utf-8'))
+        members = [m.decode('utf-8')
                    for m in record[1].get('member', [])]
         expected_members = [self.make_dn(m) for m in expected_members]
         assert set(expected_members) == set(members)
@@ -258,7 +246,7 @@ class TestGlobalCatalogInstallation(IntegrationTest):
     def assert_exists_in_gc(self, user_or_group):
         record = self.get_gc_record(user_or_group)
         assert record is not None
-        assert normalize_dn(record[0]) == self.make_dn(user_or_group)
+        assert record[0] == self.make_dn(user_or_group)
 
     def validate_and_parse_gcsync_cookie(self):
         cookie_str = self.master.get_file_contents(paths.GC_COOKIE, 'utf-8').strip()
@@ -400,7 +388,7 @@ class TestGlobalCatalogInstallation(IntegrationTest):
         res = ldapsearch_gc(host, self.master.hostname,
                             base=self.make_dn('Administrator'))
         assert len(res) == 1
-        assert normalize_dn(res[0][0]) == self.make_dn('administrator')
+        assert res[0][0] == self.make_dn('Administrator')
 
     @pytest.mark.parametrize('user_type', ['ipa', 'ipa_admin', 'ad'])
     def test_users_can_not_modify_global_catalog(self,
