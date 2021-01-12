@@ -71,4 +71,4 @@ jobs:
         test_suite: test_integration/test_trust.py
         template: *ci-master-latest
         timeout: 9000
-        topology: *adroot_adchild_adtree_master_1client
+        topology: *ad_master
