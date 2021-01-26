@@ -47,7 +47,7 @@ topologies:
     memory: 14500
 
 jobs:
-  fedora-latest/build:
+  fedora-32/build:
     requires: []
     priority: 100
     job:
@@ -55,20 +55,130 @@ jobs:
       args:
         git_repo: '{git_repo}'
         git_refspec: '{git_refspec}'
-        template: &ci-master-latest
+        template: &ci-master-f32
           name: freeipa/ci-master-f32
           version: 0.0.16
         timeout: 1800
         topology: *build
 
-  fedora-latest/temp_commit:
-    requires: [fedora-latest/build]
+  fedora-32/test_resolvers_manager:
+    requires: [fedora-32/build]
     priority: 50
     job:
       class: RunPytest
       args:
-        build_url: '{fedora-latest/build_url}'
-        test_suite: test_integration/test_REPLACEME.py
-        template: *ci-master-latest
+        build_url: '{fedora-32/build_url}'
+        test_suite: test_integration/test_resolvers_manager.py
+        template: *ci-master-f32
         timeout: 3600
+        topology: *master_3client
+
+#  fedora-32/test_acme:
+#    requires: [fedora-32/build]
+#    priority: 50
+#    job:
+#      class: RunPytest
+#      args:
+#        build_url: '{fedora-32/build_url}'
+#        test_suite: test_integration/test_acme.py
+#        template: *ci-master-f32
+#        timeout: 7200
+#        topology: *master_1repl_1client
+#
+#  fedora-32/test_backup_and_restore_TestBackupAndRestoreWithReplica:
+#    requires: [fedora-32/build]
+#    priority: 50
+#    job:
+#      class: RunPytest
+#      args:
+#        build_url: '{fedora-32/build_url}'
+#        test_suite: test_integration/test_backup_and_restore.py::TestBackupAndRestoreWithReplica
+#        template: *ci-master-f32
+#        timeout: 7200
+#        topology: *master_2repl_1client
+#
+#  fedora-32/test_cert:
+#    requires: [fedora-32/build]
+#    priority: 50
+#    job:
+#      class: RunPytest
+#      args:
+#        build_url: '{fedora-32/build_url}'
+#        test_suite: test_integration/test_cert.py
+#        template: *ci-master-f32
+#        timeout: 5400
+#        topology: *master_1repl_1client
+#
+  fedora-32/test_forced_client_enrolment:
+    requires: [fedora-32/build]
+    priority: 50
+    job:
+      class: RunPytest
+      args:
+        build_url: '{fedora-32/build_url}'
+        test_suite: test_integration/test_forced_client_reenrollment.py
+        template: *ci-master-f32
+        timeout: 4800
         topology: *master_1repl_1client
+
+  fedora-32/test_installation_TestInstallWithCA_DNS3:
+    requires: [fedora-32/build]
+    priority: 50
+    job:
+      class: RunPytest
+      args:
+        build_url: '{fedora-32/build_url}'
+        test_suite: test_integration/test_installation.py::TestInstallWithCA_DNS3
+        template: *ci-master-f32
+        timeout: 3600
+        topology: *master_1repl
+
+#  fedora-32/test_installation_TestInstallWithCA_DNS4:
+#    requires: [fedora-32/build]
+#    priority: 50
+#    job:
+#      class: RunPytest
+#      args:
+#        build_url: '{fedora-32/build_url}'
+#        test_suite: test_integration/test_installation.py::TestInstallWithCA_DNS4
+#        template: *ci-master-f32
+#        timeout: 3600
+#        topology: *master_1repl
+#
+#  fedora-32/test_smb:
+#    requires: [fedora-32/build]
+#    priority: 50
+#    job:
+#      class: RunADTests
+#      args:
+#        build_url: '{fedora-32/build_url}'
+#        test_suite: test_integration/test_smb.py
+#        template: *ci-master-f32
+#        timeout: 7200
+#        topology: *ad_master_2client
+
+  fedora-33/build:
+    requires: []
+    priority: 100
+    job:
+      class: Build
+      args:
+        git_repo: '{git_repo}'
+        git_refspec: '{git_refspec}'
+        template: &ci-master-f33
+          name: freeipa/ci-master-f33
+          version: 0.0.4
+        timeout: 1800
+        topology: *build
+
+  fedora-33/test_resolvers_manager:
+    requires: [fedora-33/build]
+    priority: 50
+    job:
+      class: RunPytest
+      args:
+        build_url: '{fedora-33/build_url}'
+        test_suite: test_integration/test_resolvers_manager.py
+        template: *ci-master-f33
+        timeout: 3600
+        topology: *master_3client
