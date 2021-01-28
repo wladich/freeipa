@@ -417,9 +417,16 @@ def config_host_resolvconf_with_master_data(master, host):
 def install_replica(master, replica, setup_ca=True, setup_dns=False,
                     setup_kra=False, setup_adtrust=False, extra_args=(),
                     domain_level=None, unattended=True, stdin_text=None,
-                    raiseonerr=True, promote=True):
+                    raiseonerr=True, promote=True, nameservers='master'):
     """
     This task installs client and then promote it to the replica
+
+    :param nameservers: nameservers to write in resolver config. Possible
+       values:
+       * "master" - use ip of `master` parameter
+       * None - do not setup resolver
+       * IP_ADDRESS or [IP_ADDRESS, ...] - use this address as resolver
+
     """
     replica_args = list(extra_args)  # needed for client's ntp options
     if domain_level is None:
@@ -450,12 +457,18 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
         for ntp_arg in ntp_args:
             replica_args.remove(ntp_arg)
 
-        install_client(master, replica, extra_args=ntp_args)
+        install_client(master, replica, extra_args=ntp_args,
+                       nameservers=nameservers)
     else:
         # for one step installation of replica we need authorized user
         # to enroll a replica and master server to contact
         args.extend(['--principal', replica.config.admin_name,
                      '--server', master.hostname])
+        replica.resolver.backup()
+        if nameservers is not None:
+            if nameservers == 'master':
+                nameservers = master.ip
+            replica.resolver.setup_resolver(nameservers, master.domain.name)
 
     if unattended:
         args.append('-U')
@@ -498,7 +511,15 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
 
 
 def install_client(master, client, extra_args=[], user=None,
-                   password=None, unattended=True, stdin_text=None):
+                   password=None, unattended=True, stdin_text=None,
+                   nameservers='master'):
+    """
+    :param nameservers: nameservers to write in resolver config. Possible
+           values:
+           * "master" - use ip of `master` parameter
+           * None - do not setup resolver
+           * IP_ADDRESS or [IP_ADDRESS, ...] - use this address as resolver
+    """
     apply_common_fixes(client)
     allow_sync_ptr(master)
     # Now, for the situations where a client resides in a different subnet from
@@ -508,6 +529,11 @@ def install_client(master, client, extra_args=[], user=None,
     if not error:
         master.run_command(["ipa", "dnszone-mod", zone,
                             "--dynamic-update=TRUE"])
+    client.resolver.backup()
+    if nameservers is not None:
+        if nameservers == 'master':
+            nameservers = master.ip
+        client.resolver.setup_resolver(nameservers, master.domain.name)
     if user is None:
         user = client.config.admin_name
     if password is None:
@@ -1028,9 +1054,13 @@ def uninstall_master(host, ignore_topology_disconnect=True,
 
 
 def uninstall_client(host):
-    host.run_command(['ipa-client-install', '--uninstall', '-U'],
+    res = host.run_command(['ipa-client-install', '--uninstall', '-U'],
                      raiseonerr=False)
+    # if client is already uninstalled, resolver should be restored
+    if res.returncode == 0:
+        host.resolver.restore()
     unapply_fixes(host)
+    assert not host.resolver.has_backups()
 
 
 @check_arguments_are((0, 2), Host)
@@ -1344,18 +1374,35 @@ def install_topo(topo, master, replicas, clients, domain_level=None,
             install_replica(
                 parent, child,
                 setup_ca=setup_replica_cas,
-                setup_kra=setup_replica_kras
+                setup_kra=setup_replica_kras,
+                nameservers=master.ip,
             )
         installed.add(child)
     install_clients([master] + replicas, clients, clients_extra_args)
 
 
-def install_clients(servers, clients, extra_args=()):
-    """Install IPA clients, distributing them among the given servers"""
+def install_clients(servers, clients, extra_args=(),
+                    nameservers='first'):
+    """Install IPA clients, distributing them among the given servers
+
+       :param nameservers: nameservers to write in resolver config on clients.
+       Possible values:
+       * "first" - use ip of the first item in `servers` parameter
+       * "distribute" - use ip of master/replica which is used for client
+                        installation
+       * None - do not setup resolver
+       * IP_ADDRESS or [IP_ADDRESS, ...] - use this address as resolver
+    """
     izip = getattr(itertools, 'izip', zip)
+    client_nameservers = nameservers
     for server, client in izip(itertools.cycle(servers), clients):
         logger.info('Installing client %s on %s', server, client)
-        install_client(server, client, extra_args)
+        if nameservers == 'distribute':
+            client_nameservers = server.ip
+        if nameservers == 'first':
+            client_nameservers = servers[0].ip
+        install_client(server, client, extra_args,
+                       nameservers=client_nameservers)
 
 
 def _entries_to_ldif(entries):
@@ -1610,6 +1657,7 @@ def uninstall_replica(master, replica):
                         "-p", master.config.dirman_password,
                         replica.hostname], raiseonerr=False)
     uninstall_master(replica)
+    replica.resolver.restore()
 
 
 def replicas_cleanup(func):
