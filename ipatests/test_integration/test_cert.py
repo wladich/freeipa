@@ -65,9 +65,6 @@ class TestInstallMasterClient(IntegrationTest):
     def install(cls, mh):
         tasks.install_master(cls.master, setup_dns=True)
         # use master's DNS so nsupdate adds correct IP address for client
-        tasks.config_host_resolvconf_with_master_data(
-            cls.master, cls.clients[0]
-        )
         tasks.install_client(cls.master, cls.clients[0])
 
         # time to look into journal logs in

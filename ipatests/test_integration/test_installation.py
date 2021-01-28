@@ -42,23 +42,12 @@ config = get_global_config()
 def create_broken_resolv_conf(master):
     # Force a broken resolv.conf to simulate a bad response to
     # reverse zone lookups
-    master.run_command([
-        '/bin/mv',
-        paths.RESOLV_CONF,
-        '%s.sav' % paths.RESOLV_CONF
-    ])
-
-    contents = "# Set as broken by ipatests\nnameserver 127.0.0.2\n"
-    master.put_file_contents(paths.RESOLV_CONF, contents)
+    master.resolver.backup()
+    master.resolver.setup_resolver('127.0.0.2')
 
 
 def restore_resolv_conf(master):
-    if os.path.exists('%s.sav' % paths.RESOLV_CONF):
-        master.run_command([
-            '/bin/mv',
-            '%s.sav' % paths.RESOLV_CONF,
-            paths.RESOLV_CONF
-        ])
+    master.resolver.restore()
 
 
 def server_install_setup(func):
